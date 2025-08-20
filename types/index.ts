@@ -43,3 +43,10 @@ export type HoneyResult = {
     mode: "triple" | "fallback" | "none";
     topK: number;
 };
+export type CompSummary = {
+    comp: number[]; // 캐릭터 id 배열 [1,2,3]
+    winRate: number;
+    pickRate: number;
+    mmrGain: number;
+    count: number;
+};
