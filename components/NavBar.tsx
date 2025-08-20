@@ -8,7 +8,9 @@ export default function NavBar() {
 
     const links = [
         { href: "/", label: "캐릭터별 통계" },
-        { href: "/comps", label: "조합별 통계" },
+        // { href: "/comps", label: "조합별 통계" },
+        { href: "/cluster-comps", label: "클러스터 조합 통계" },
+        { href: "/cluster", label: "클러스터 디렉터리" },
     ];
 
     return (

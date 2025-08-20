@@ -50,3 +50,45 @@ export type CompSummary = {
     mmrGain: number;
     count: number;
 };
+export type ClusterLabel = string; // 'A' | 'B' ... 문자 라벨
+
+export type ClusterTriadSummary = {
+    clusters: [ClusterLabel, ClusterLabel, ClusterLabel]; // 예: ['탱커','브루저','원딜'] 대신 지금은 문자 라벨
+    winRate: number; // 0..1
+    pickRate: number; // 0..1
+    mmrGain: number; // per game
+    count: number; // 표본 수
+    patch?: string;
+    tier?: string;
+};
+
+// (기존) 캐릭터 타입은 그대로 두되, 이번 페이지에선 사용 안 함
+export type CharacterSummary = {
+    id: number;
+    name: string;
+    imageUrl?: string;
+    rankTier?: string;
+};
+
+export type ClusterLabel = string; // 'A' | 'B' | ... 'U'
+export type Role =
+    | "탱커"
+    | "브루저"
+    | "암살자"
+    | "원딜"
+    | "서포터"
+    | "컨트롤"
+    | "기타";
+
+export type CharacterBrief = {
+    id: number;
+    name: string;
+    imageUrl?: string;
+};
+
+export type ClusterMeta = {
+    label: ClusterLabel; // e.g. 'A'
+    role: Role; // e.g. '탱커'
+    characters: CharacterBrief[];
+    note?: string; // 선택: 설명/특징
+};
