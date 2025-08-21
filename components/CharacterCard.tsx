@@ -16,8 +16,8 @@ export default function CharacterCard({
 }) {
     const honeyTitle =
         honey.mode === "triple"
-            ? "상위 10% 모두 충족 (승률·픽률·MMR)"
-            : "종합 상위 10% (z-score)";
+            ? "Top 10% on all (Win·Pick·MMR)"
+            : "Top 10% overall (z-score)";
     return (
         <div className="space-y-3">
             <div className="flex items-center gap-2">

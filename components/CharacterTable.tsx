@@ -14,9 +14,11 @@ import HoneyBadge from "./HoneyBadge";
 export default function CharacterTable({
     rows,
     onSelect,
+    honeyIds,
 }: {
     rows: CharacterSummary[];
     onSelect: (id: number) => void;
+    honeyIds?: Set<number>; // optional external honey selection
 }) {
     const [sortKey, setSortKey] = useState<SortKey>("tier");
     const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -25,7 +27,7 @@ export default function CharacterTable({
         () => sortRows(rows, sortKey, sortDir),
         [rows, sortKey, sortDir],
     );
-    const honey = useMemo(() => computeHoneySet(rows), [rows]);
+    const honeySet = useMemo(() => honeyIds ?? computeHoneySet(rows, 3).ids, [honeyIds, rows]);
 
     return (
         <div className="overflow-auto rounded-xl border border-white/10 max-h-[70vh] overscroll-contain">
@@ -92,7 +94,7 @@ export default function CharacterTable({
                         >
                             <td className="whitespace-nowrap px-3 py-2 flex items-center gap-1">
                                 <TierPill tier={r.tier} />
-                                {honey.ids.has(r.id) && (
+                                {honeySet.has(r.id) && (
                                     <HoneyBadge title="상위 10% (대표무기 기준)" />
                                 )}
                             </td>

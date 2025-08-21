@@ -78,3 +78,76 @@
         color: white;
     }
 }
+
+/* 기본 배경/텍스트 */
+body {
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* 변수 기반 유틸리티 */
+@layer utilities {
+    .text-app { color: var(--text); }
+    .text-muted-app { color: var(--text-muted); }
+    .bg-app { background-color: var(--bg); }
+    .bg-surface { background-color: var(--surface); }
+    .bg-muted { background-color: var(--muted); }
+    .border-app { border-color: var(--border); }
+
+    /* overlay 유사 효과 */
+    .bg-elev-5 { background: color-mix(in lab, var(--text), transparent 95%); }
+    .bg-elev-10 { background: color-mix(in lab, var(--text), transparent 90%); }
+    .bg-elev-15 { background: color-mix(in lab, var(--text), transparent 85%); }
+    .bg-elev-20 { background: color-mix(in lab, var(--text), transparent 80%); }
+    .bg-elev-30 { background: color-mix(in lab, var(--text), transparent 70%); }
+}
+
+/* 라이트 모드에서 기존 하드코딩 클래스 remap */
+/* 텍스트 */
+.light .text-white { color: var(--text) !important; }
+.light .text-white\/80 { color: var(--text-muted) !important; }
+.light .text-white\/70 { color: var(--text-muted) !important; }
+.light .text-white\/60 { color: var(--text-muted) !important; }
+.light .text-white\/50 { color: var(--text-muted) !important; }
+.light .text-white\/40 { color: var(--text-muted) !important; }
+.light .text-white\/30 { color: var(--text-muted) !important; }
+.light .hover\:text-white:hover { color: var(--text) !important; }
+
+/* 보더 */
+.light .border-white\/5 { border-color: var(--border) !important; }
+.light .border-white\/10 { border-color: var(--border) !important; }
+.light .border-white\/20 { border-color: var(--border) !important; }
+.light .border-white\/30 { border-color: var(--border) !important; }
+
+/* 배경 overlay */
+.light .bg-white\/5 { background: color-mix(in lab, var(--text), transparent 95%) !important; }
+.light .bg-white\/10 { background: color-mix(in lab, var(--text), transparent 90%) !important; }
+.light .bg-white\/15 { background: color-mix(in lab, var(--text), transparent 85%) !important; }
+.light .bg-white\/20 { background: color-mix(in lab, var(--text), transparent 80%) !important; }
+.light .bg-white\/30 { background: color-mix(in lab, var(--text), transparent 70%) !important; }
+.light .bg-white\/60 { background: color-mix(in lab, var(--text), transparent 40%) !important; }
+.light .hover\:bg-white\/5:hover { background: color-mix(in lab, var(--text), transparent 95%) !important; }
+.light .hover\:bg-white\/10:hover { background: color-mix(in lab, var(--text), transparent 90%) !important; }
+.light .hover\:bg-white\/15:hover { background: color-mix(in lab, var(--text), transparent 85%) !important; }
+.light .hover\:bg-white\/20:hover { background: color-mix(in lab, var(--text), transparent 80%) !important; }
+.light .hover\:bg-white\/30:hover { background: color-mix(in lab, var(--text), transparent 70%) !important; }
+
+/* 블랙 overlay */
+.light .bg-black\/40 { background: color-mix(in lab, var(--text), transparent 60%) !important; }
+.light .hover\:bg-black\/60:hover { background: color-mix(in lab, var(--text), transparent 40%) !important; }
+
+/* placeholder 색상 */
+.light .placeholder-white\/50::placeholder { color: var(--text-muted) !important; }
+
+/* 가독성 예외 처리 */
+.light .bg-blue-600 .text-white, .light .bg-blue-600.text-white { color: #fff !important; }
+.light .bg-black\/40 .text-white, .light .bg-black\/40.text-white { color: #fff !important; }
+
+/* 다크 전용 헥스 배경 remap -> 변수 기반 */
+.light .bg-\[\#0E1730\] { background-color: var(--muted) !important; }
+.light .bg-\[\#0E1422\] { background-color: var(--muted) !important; }
+.light .bg-\[\#141F3A\] { background-color: var(--muted) !important; }
+.light .bg-\[\#0F1830\] { background-color: var(--muted) !important; }
+.light .bg-\[\#16223C\] { background-color: var(--muted) !important; }
+.light .bg-\[\#111A2E\] { background-color: var(--surface) !important; }
+.light .bg-\[\#121826\] { background-color: var(--surface) !important; }

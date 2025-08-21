@@ -21,7 +21,7 @@ export default function ThemeToggle() {
             aria-label="Toggle color theme"
             title={isDark ? "라이트 모드" : "다크 모드"}
         >
-            {isDark ? "☀️" : "🌙"}
+            {isDark ? "🌙" : "☀️"}
         </button>
     );
 }

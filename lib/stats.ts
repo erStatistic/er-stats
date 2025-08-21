@@ -52,28 +52,15 @@ export function computeHoneySet(rows: CharacterSummary[]): HoneyResult {
     const wrT = computeTop10Threshold(rows.map((r) => r.winRate));
     const prT = computeTop10Threshold(rows.map((r) => r.pickRate));
     const mmT = computeTop10Threshold(rows.map((r) => r.mmrGain));
-    const triple = rows
-        .filter(
-            (r) => r.winRate >= wrT && r.pickRate >= prT && r.mmrGain >= mmT,
-        )
-        .map((r) => r.id);
-    if (triple.length > 0)
-        return { ids: new Set(triple), mode: "triple", topK: triple.length };
 
-    const { mean: mw, std: sw } = meanStd(rows.map((r) => r.winRate));
-    const { mean: mp, std: sp } = meanStd(rows.map((r) => r.pickRate));
-    const { mean: mm, std: sm } = meanStd(rows.map((r) => r.mmrGain));
-    const score = (r: CharacterSummary) =>
-        (sw ? (r.winRate - mw) / sw : 0) +
-        (sp ? (r.pickRate - mp) / sp : 0) +
-        (sm ? (r.mmrGain - mm) / sm : 0);
-    const scored = rows
-        .map((r) => ({ id: r.id, s: score(r) }))
-        .sort((a, b) => b.s - a.s);
-    const topK = Math.max(1, Math.floor(rows.length * 0.1));
+    // const triple = rows.filter(
+    //     (r) => r.winRate >= wrT && r.pickRate >= prT && r.mmrGain >= mmT,
+    // );
+
+    const triple = rows.filter((r) => r.winRate >= wrT);
     return {
-        ids: new Set(scored.slice(0, topK).map((x) => x.id)),
-        mode: "fallback",
-        topK,
+        ids: new Set(triple.map((r) => r.id)),
+        mode: "triple",
+        topK: triple.length,
     };
 }

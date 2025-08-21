@@ -67,6 +67,7 @@ export default function HomeClient({
     const [q, setQ] = useState("");
     const [patch, setPatch] = useState<Patch>("v0.76");
     const [gameTier, setGameTier] = useState<GameTier>("All"); // ← 단일 선택 탭
+    const [honeyOnly, setHoneyOnly] = useState(false);
     const [selectedId, setSelectedId] = useState<number | null>(null);
 
     // (추후 서버 패치 데이터로 교체 가능)
@@ -83,15 +84,21 @@ export default function HomeClient({
         });
     }, [q, gameTier, patchedRows]);
 
+    const honey = useMemo(() => computeHoneySet(filtered, 3), [filtered]);
+
+    // 허니 배지 필터 적용된 가시 목록
+    const visibleRows = useMemo(
+        () => (honeyOnly ? filtered.filter((r) => honey.ids.has(r.id)) : filtered),
+        [filtered, honeyOnly, honey],
+    );
+
     const selected = useMemo(
         () =>
             selectedId == null
                 ? null
-                : filtered.find((r) => r.id === selectedId) || null,
-        [filtered, selectedId],
+                : visibleRows.find((r) => r.id === selectedId) || null,
+        [visibleRows, selectedId],
     );
-
-    const honey = useMemo(() => computeHoneySet(filtered), [filtered]);
 
     const goDetail = (id: number) => {
         window.location.href = `/characters/${id}`;
@@ -141,10 +148,29 @@ export default function HomeClient({
                         }}
                         items={GAME_TIERS}
                     />
+
+                    {/* 허니 배지 필터 */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setHoneyOnly((prev) => !prev);
+                            setSelectedId(null);
+                        }}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition border ${
+                            honeyOnly
+                                ? "bg-white/20 text-white border-white/30"
+                                : "text-white/70 hover:bg-white/10 border-white/10"
+                        }`}
+                        title="허니 배지 보유만 보기"
+                    >
+                        <span aria-hidden>🍯</span>
+                        <span className="ml-1">허니만</span>
+                    </button>
                 </div>
 
                 <CharacterTable
-                    rows={filtered}
+                    rows={visibleRows}
+                    honeyIds={honey.ids}
                     onSelect={(id) =>
                         setSelectedId((prev) => (prev === id ? null : id))
                     } // 같은 행 클릭 시 닫힘
