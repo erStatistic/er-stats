@@ -9,7 +9,6 @@ export default function ClustersPage() {
     const data = makeClusterDirectory();
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
-            <NavBar />
             <h1 className="text-xl font-bold text-white mb-4">
                 군집(클러스터) 디렉터리
             </h1>

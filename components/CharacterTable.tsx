@@ -40,6 +40,7 @@ export default function CharacterTable({
                                 "winRate",
                                 "pickRate",
                                 "mmrGain",
+                                "survivalTime",
                             ] as SortKey[]
                         ).map((col) => (
                             <th
@@ -67,7 +68,9 @@ export default function CharacterTable({
                                               ? "승률"
                                               : col === "pickRate"
                                                 ? "픽률"
-                                                : "획득 MMR"}
+                                                : col === "mmrGain"
+                                                  ? "평균 MMR"
+                                                  : "생존 시간"}
                                     <span className="text-xs text-white/40">
                                         {sortKey === col
                                             ? sortDir === "asc"
@@ -104,6 +107,9 @@ export default function CharacterTable({
                             </td>
                             <td className="whitespace-nowrap px-3 py-2">
                                 {formatPercent(r.pickRate)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                                {formatMMR(r.mmrGain, 1)}
                             </td>
                             <td className="whitespace-nowrap px-3 py-2">
                                 {formatMMR(r.mmrGain, 1)}

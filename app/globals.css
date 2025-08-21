@@ -1,31 +1,80 @@
+/* @import "tailwindcss"; */
+/* @tailwind base; */
+/* @tailwind components; */
+/* @tailwind utilities; */
+/**/
+/* :root { */
+/*     --background: #ffffff; */
+/*     --foreground: #171717; */
+/*     color-scheme: dark; */
+/* } */
+/**/
+/* @theme inline { */
+/*     --color-background: var(--background); */
+/*     --color-foreground: var(--foreground); */
+/*     --font-sans: var(--font-geist-sans); */
+/*     --font-mono: var(--font-geist-mono); */
+/* } */
+/**/
+/* @media (prefers-color-scheme: dark) { */
+/*     :root { */
+/*         --background: #0a0a0a; */
+/*         --foreground: #ededed; */
+/*     } */
+/* } */
+/**/
+/* body { */
+/*     background: var(--background); */
+/*     color: var(--foreground); */
+/*     font-family: Arial, Helvetica, sans-serif; */
+/*     @apply bg-[#0B1220] text-white; */
+/* } */
 @import "tailwindcss";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* 공통 변수 */
 :root {
-    --background: #ffffff;
-    --foreground: #171717;
-    color-scheme: dark;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --muted: #f3f4f6;
+    --border: #e5e7eb;
+    --text: #0f172a;
+    --text-muted: #334155;
+    --brand: #00d1b2;
+    color-scheme: light dark;
 }
 
-@theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
+/* 다크 모드 변수 */
+.dark {
+    --bg: #0b1220;
+    --surface: #111a2e;
+    --muted: #0e1730;
+    --border: rgba(255, 255, 255, 0.1);
+    --text: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.7);
+    --brand: #00d1b2;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #0a0a0a;
-        --foreground: #ededed;
+/* 전역 유틸 */
+@layer components {
+    .card {
+        @apply rounded-2xl border p-4 transition-colors;
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--text);
     }
-}
 
-body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
-    @apply bg-[#0B1220] text-white;
+    .muted-strip {
+        @apply rounded-lg p-2;
+        background: var(--muted);
+        color: var(--text-muted);
+    }
+
+    .badge {
+        @apply px-2 py-1 rounded-full text-sm font-medium;
+        background: var(--brand);
+        color: white;
+    }
 }

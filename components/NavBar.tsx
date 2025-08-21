@@ -7,14 +7,17 @@ export default function NavBar() {
     const pathname = usePathname();
 
     const links = [
-        { href: "/", label: "캐릭터별 통계" },
-        // { href: "/comps", label: "조합별 통계" },
+        { href: "/character", label: "캐릭터별 통계" },
         { href: "/cluster-comps", label: "클러스터 조합 통계" },
+        // { href: "/suggest", label: "유저 맞춤 조합 추천" },
+        { href: "/suggest-multi", label: "유저 맞춤 조합 추천" },
+        // { href: "/comps", label: "조합별 통계" },
+        { href: "/patches", label: "밸런스 패치" },
         { href: "/cluster", label: "클러스터 디렉터리" },
     ];
 
     return (
-        <nav className="flex gap-4 border-b border-white/10 bg-[#111A2E] p-3 mb-4 rounded-xl">
+        <nav className="flex gap-4  rounded-xl">
             {links.map((l) => {
                 const active = pathname === l.href;
                 return (

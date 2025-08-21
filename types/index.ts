@@ -92,3 +92,46 @@ export type ClusterMeta = {
     characters: CharacterBrief[];
     note?: string; // 선택: 설명/특징
 };
+export type UserProfile = {
+    name: string;
+    topChars: { id: number; name: string; imageUrl?: string }[]; // 최근 n게임 기준 Top3
+};
+
+export type CompSuggestion = {
+    comp: number[]; // [a,b,c] 캐릭터 id
+    winRateEst: number; // 0..1 모델 추정
+    pickRateEst: number; // 0..1
+    mmrGainEst: number; // per-game 추정
+    support: {
+        fromPairs: number; // pair 시너지 가중치
+        fromSolo: number; // solo 강도 가중치
+        fromCluster: number; // cluster 조합 가중치
+        modeled: boolean; // 관측 부족/모델 보정 여부
+    };
+    note?: string;
+};
+// types.ts (필요분만 추가)
+export type PatchKind = "official" | "hotfix"; // 정식/핫픽스
+export type ChangeType = "buff" | "nerf" | "adjust" | "rework";
+
+export type PatchEntry = {
+    id: string;
+    targetType: "character" | "weapon" | "system";
+    targetId?: number;
+    targetName: string; // 예: "나딘", "활", "야생동물"
+    changeType: ChangeType; // buff/nerf/adjust/rework
+    field: string; // 예: "Q 피해량", "패시브", "이속"
+    before?: string | number;
+    after?: string | number;
+    delta?: string; // 예: "+10%", "-20(고정)"
+    notes?: string; // 상세 설명
+};
+
+export type PatchNote = {
+    id: string; // "v0.76-official", "v0.76.1-hotfix"
+    version: string; // "v0.76", "v0.76.1"
+    kind: PatchKind; // official/hotfix
+    date: string; // "2025-08-12"
+    title?: string; // "밸런스 패치 0.76"
+    entries: PatchEntry[];
+};

@@ -56,9 +56,6 @@ export default function CompsPage() {
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
-            <NavBar />
-
-            {/* ⭐ 상위 조합 캐러셀 */}
             {topComps.length > 0 && (
                 <>
                     <h2 className="text-lg sm:text-xl font-bold text-white mb-4">
