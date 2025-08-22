@@ -1,3 +1,4 @@
+// components/ClusterDirectoryClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -39,18 +40,18 @@ export default function ClusterDirectoryClient({
     }, [filtered, sort]);
 
     return (
-        <div className="text-white">
+        <div className="text-app">
             {/* 상단 바: 검색 + 역할 탭 + 정렬 */}
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                     <input
-                        className="w-56 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                        className="w-56 rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none placeholder:text-muted-app"
                         placeholder="클러스터 / 캐릭터 검색"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                     />
                     <select
-                        className="rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none"
+                        className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                         value={sort}
                         onChange={(e) => setSort(e.target.value as SortKey)}
                     >
@@ -85,7 +86,7 @@ export default function ClusterDirectoryClient({
             </div>
 
             {sorted.length === 0 && (
-                <div className="mt-10 text-center text-white/60">
+                <div className="mt-10 text-center text-muted-app">
                     조건에 맞는 군집이 없습니다.
                 </div>
             )}
@@ -105,11 +106,12 @@ function RoleTab({
     return (
         <button
             onClick={onClick}
-            className={`rounded-full border px-3 py-1 text-xs ${
+            className={`rounded-full px-3 py-1 text-xs border transition-colors ${
                 active
-                    ? "bg-white/15 border-white/30"
-                    : "bg-[#16223C] border-white/10 hover:bg-white/10"
+                    ? "bg-[var(--brand)] text-white border-transparent"
+                    : "bg-surface text-app border-app hover:bg-elev-5"
             }`}
+            aria-pressed={active}
         >
             {label}
         </button>

@@ -1,3 +1,4 @@
+// components/ClusterCompsClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -60,17 +61,17 @@ export default function ClusterCompsClient({
     const top = sorted.slice(0, Math.min(3, sorted.length));
 
     return (
-        <div className="text-white">
-            {/* 필터바 */}
+        <div className="text-app">
+            {/* 필터 바 */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 <input
-                    className="w-44 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                    className="w-44 rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none placeholder:text-muted-app"
                     placeholder="클러스터 검색 (예: ABC)"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                 />
                 <select
-                    className="rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none"
+                    className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={patch}
                     onChange={(e) => setPatch(e.target.value as Patch)}
                 >
@@ -81,7 +82,7 @@ export default function ClusterCompsClient({
                     ))}
                 </select>
                 <select
-                    className="rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none"
+                    className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={tier}
                     onChange={(e) => setTier(e.target.value as GameTier)}
                 >
@@ -92,7 +93,7 @@ export default function ClusterCompsClient({
                     ))}
                 </select>
                 <select
-                    className="rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none"
+                    className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={sort}
                     onChange={(e) => setSort(e.target.value as any)}
                 >
@@ -124,22 +125,33 @@ export default function ClusterCompsClient({
             )}
 
             {/* 리스트 테이블 */}
-            <div className="mt-8 rounded-2xl border border-white/10 bg-[#111A2E] overflow-hidden">
+            <div className="card mt-8 p-0 overflow-hidden">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-[#0E1730] text-white/80">
-                        <tr>
-                            <th className="px-3 py-2 text-left">
+                    <thead className="bg-muted">
+                        <tr className="text-muted-app">
+                            <th className="px-3 py-2 text-left font-medium">
                                 조합(Clusters)
                             </th>
-                            <th className="px-3 py-2 text-right">승률</th>
-                            <th className="px-3 py-2 text-right">픽률</th>
-                            <th className="px-3 py-2 text-right">평균 MMR</th>
-                            <th className="px-3 py-2 text-right">게임 수</th>
+                            <th className="px-3 py-2 text-right font-medium">
+                                승률
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                                픽률
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                                평균 MMR
+                            </th>
+                            <th className="px-3 py-2 text-right font-medium">
+                                게임 수
+                            </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-[#141F3A]">
+                    <tbody>
                         {sorted.map((s, i) => (
-                            <tr key={i} className="border-t border-white/5">
+                            <tr
+                                key={i}
+                                className="border-t border-app hover:bg-elev-5 transition-colors"
+                            >
                                 <td className="px-3 py-2">
                                     <span className="inline-flex gap-1">
                                         {s.clusters.map((c, j) => (
@@ -147,7 +159,9 @@ export default function ClusterCompsClient({
                                                 key={`${c}-${j}`}
                                                 className="inline-block"
                                             >
-                                                <strong>{c}</strong>
+                                                <strong className="text-app">
+                                                    {c}
+                                                </strong>
                                                 {j < 2 ? " · " : ""}
                                             </span>
                                         ))}
@@ -171,7 +185,7 @@ export default function ClusterCompsClient({
                             <tr>
                                 <td
                                     colSpan={5}
-                                    className="px-3 py-6 text-center text-white/60"
+                                    className="px-3 py-6 text-center text-muted-app"
                                 >
                                     표시할 조합이 없습니다.
                                 </td>

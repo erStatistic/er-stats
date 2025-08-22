@@ -1,8 +1,17 @@
+// components/PatchFilters.tsx
 "use client";
 
 import { ChangeType } from "@/types";
 
 const ALL: ChangeType[] = ["buff", "nerf", "adjust", "rework"];
+
+// 의미색 (라이트/다크 공통으로 잘 보이는 톤)
+const ACCENT: Record<ChangeType, string> = {
+    buff: "#10b981", // emerald-500
+    nerf: "#ef4444", // red-500
+    adjust: "#38bdf8", // sky-400
+    rework: "#f59e0b", // amber-500
+};
 
 export default function PatchFilters({
     q,
@@ -15,44 +24,52 @@ export default function PatchFilters({
     selectedTypes: ChangeType[];
     onToggleType: (t: ChangeType) => void;
 }) {
-    const chipStyle = (t: ChangeType) => {
+    const Chip = ({ t }: { t: ChangeType }) => {
         const active = selectedTypes.includes(t);
-        const base = "text-xs rounded-full border px-3 py-1 transition-colors";
-        const byType =
-            t === "buff"
-                ? "border-emerald-400/40 text-emerald-300"
-                : t === "nerf"
-                  ? "border-rose-400/40 text-rose-300"
-                  : t === "rework"
-                    ? "border-amber-400/40 text-amber-300"
-                    : "border-sky-400/40 text-sky-300";
-        const bg = active ? "bg-white/10" : "hover:bg-white/5";
-        return `${base} ${byType} ${bg}`;
+        const color = ACCENT[t];
+
+        return (
+            <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => onToggleType(t)}
+                className="text-xs rounded-full px-3 py-1 border transition-colors"
+                style={{
+                    borderColor: active ? `${color}66` : "var(--border)",
+                    background: active ? `${color}1a` : "var(--surface)",
+                    color: active ? color : "var(--text)",
+                }}
+            >
+                {t === "buff"
+                    ? "버프"
+                    : t === "nerf"
+                      ? "너프"
+                      : t === "rework"
+                        ? "리워크"
+                        : "조정"}
+            </button>
+        );
     };
 
     return (
-        <div className="rounded-2xl border border-white/10 bg-[#111A2E] p-3 flex flex-wrap items-center gap-2">
+        <div className="card p-3 flex flex-wrap items-center gap-2">
+            {/* 검색 입력 */}
             <input
-                className="w-64 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                className="rounded-xl border px-3 py-2 text-sm outline-none"
+                style={{
+                    borderColor: "var(--border)",
+                    background: "var(--surface)",
+                    color: "var(--text)",
+                }}
                 placeholder="실험체/무기/설명 검색"
                 value={q}
                 onChange={(e) => onChangeQ(e.target.value)}
             />
+
+            {/* 타입 칩들 */}
             <div className="flex items-center gap-2">
                 {ALL.map((t) => (
-                    <button
-                        key={t}
-                        className={chipStyle(t)}
-                        onClick={() => onToggleType(t)}
-                    >
-                        {t === "buff"
-                            ? "버프"
-                            : t === "nerf"
-                              ? "너프"
-                              : t === "rework"
-                                ? "리워크"
-                                : "조정"}
-                    </button>
+                    <Chip key={t} t={t} />
                 ))}
             </div>
         </div>

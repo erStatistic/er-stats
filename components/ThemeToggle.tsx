@@ -1,9 +1,14 @@
+// components/ThemeToggle.tsx
 "use client";
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
-export default function ThemeToggle() {
+export default function ThemeToggle({
+    className = "",
+}: {
+    className?: string;
+}) {
     const { theme, setTheme, resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
@@ -12,16 +17,26 @@ export default function ThemeToggle() {
     if (!mounted) return null;
 
     const isDark = (theme ?? resolvedTheme) === "dark";
+    const nextTheme = isDark ? "light" : "dark";
 
     return (
         <button
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            className="rounded-lg px-3 py-1.5 text-sm
-                 hover:bg-white/10 transition-colors"
-            aria-label="Toggle color theme"
-            title={isDark ? "라이트 모드" : "다크 모드"}
+            type="button"
+            role="switch"
+            aria-checked={isDark}
+            onClick={() => setTheme(nextTheme)}
+            title={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition-colors ${className}`}
+            style={{
+                background: "var(--surface)",
+                borderColor: "var(--border)",
+                color: "var(--text)",
+            }}
         >
-            {isDark ? "🌙" : "☀️"}
+            <span aria-hidden>{isDark ? "🌙" : "☀️"}</span>
+            <span className="hidden sm:inline">
+                {isDark ? "Dark" : "Light"}
+            </span>
         </button>
     );
 }

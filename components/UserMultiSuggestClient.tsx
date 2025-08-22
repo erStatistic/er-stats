@@ -1,3 +1,4 @@
+// components/UserMultiSuggestClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -82,7 +83,7 @@ function recommendForChars(
     const poolLimit = opts.poolLimit ?? UNIVERSE.length;
 
     const ids = partial.map((p) => p.id);
-    // If exactly 3 are selected, return a single result for the trio
+    // Exactly 3 → 그 조합 하나만 리턴
     if (partial.length === 3) {
         const { winRate, pickRate, mmrGain, count } = compStats(ids);
         return [
@@ -102,13 +103,14 @@ function recommendForChars(
         ] as CompSuggestion[];
     }
 
-    // Candidate pool
+    // 후보 풀
     const pool = UNIVERSE.map((x) => x.id)
         .slice(0, poolLimit)
         .filter((id) => !ids.includes(id));
+
     const out: CompSuggestion[] = [];
 
-    // If 1 anchor → fill 2 spots, if 2 anchors → fill 1 spot
+    // 1명 고정 → 2자리 채우기 / 2명 고정 → 1자리 채우기
     for (let i = 0; i < pool.length && out.length < topK * 2; i++) {
         if (partial.length === 1) {
             for (let j = i + 1; j < pool.length && out.length < topK * 2; j++) {
@@ -179,8 +181,7 @@ export default function UserMultiSuggestClient() {
     const addUser = async () => {
         const name = input.trim();
         if (!name) return;
-        if (users.length >= 3)
-            return toast.error("You can add up to 3 users.");
+        if (users.length >= 3) return toast.error("You can add up to 3 users.");
         if (users.some((u) => u.name.toLowerCase() === name.toLowerCase()))
             return toast.error(`"${name}" is already added.`);
         setLoading(true);
@@ -251,17 +252,31 @@ export default function UserMultiSuggestClient() {
         UNIVERSE.find((x) => x.id === id)?.name || `ID ${id}`;
 
     return (
-        <div className="text-white">
+        <div>
             {/* Tabs */}
             <div className="mb-4 flex gap-2">
                 <button
-                    className={`rounded-xl border px-4 py-2 text-sm transition-colors ${tab === "user" ? "bg-white/10 border-white/20" : "border-white/10 hover:bg-white/5"}`}
+                    className="rounded-xl border px-4 py-2 text-sm transition-colors"
+                    style={{
+                        borderColor: "var(--border)",
+                        background:
+                            tab === "user" ? "var(--muted)" : "var(--surface)",
+                        color: "var(--text)",
+                    }}
                     onClick={() => setTab("user")}
                 >
                     By User
                 </button>
                 <button
-                    className={`rounded-xl border px-4 py-2 text-sm transition-colors ${tab === "character" ? "bg-white/10 border-white/20" : "border-white/10 hover:bg-white/5"}`}
+                    className="rounded-xl border px-4 py-2 text-sm transition-colors"
+                    style={{
+                        borderColor: "var(--border)",
+                        background:
+                            tab === "character"
+                                ? "var(--muted)"
+                                : "var(--surface)",
+                        color: "var(--text)",
+                    }}
                     onClick={() => setTab("character")}
                 >
                     By Character
@@ -273,7 +288,12 @@ export default function UserMultiSuggestClient() {
                 <section className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <input
-                            className="w-64 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                            className="w-64 rounded-xl border px-3 py-2 text-sm outline-none placeholder-white/50"
+                            style={{
+                                borderColor: "var(--border)",
+                                background: "var(--surface)",
+                                color: "var(--text)",
+                            }}
                             placeholder="User nickname (up to 3)"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -281,9 +301,17 @@ export default function UserMultiSuggestClient() {
                         />
                         <button
                             onClick={addUser}
-                            className="rounded-xl border border-white/10 px-4 py-2 text-sm hover:bg-white/5"
+                            className="rounded-xl border px-4 py-2 text-sm transition"
+                            style={{
+                                borderColor: "var(--border)",
+                                background: "var(--surface)",
+                                color: "var(--text)",
+                            }}
                             disabled={
                                 loading || !input.trim() || users.length >= 3
+                            }
+                            title={
+                                users.length >= 3 ? "Max 3 users" : undefined
                             }
                         >
                             {loading ? "Adding..." : "Add user"}
@@ -291,7 +319,12 @@ export default function UserMultiSuggestClient() {
                         {users.length > 0 && (
                             <button
                                 onClick={() => setUsers([])}
-                                className="ml-2 rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/5"
+                                className="ml-2 rounded-xl border px-3 py-2 text-xs transition"
+                                style={{
+                                    borderColor: "var(--border)",
+                                    background: "var(--surface)",
+                                    color: "var(--text)",
+                                }}
                             >
                                 Clear all
                             </button>
@@ -312,7 +345,7 @@ export default function UserMultiSuggestClient() {
                             ))}
                         </div>
                     ) : (
-                        <div className="mt-10 text-white/60 text-sm">
+                        <div className="mt-10 text-sm text-muted-app">
                             Add 1–3 users to see personalized team suggestions.
                         </div>
                     )}
@@ -324,10 +357,7 @@ export default function UserMultiSuggestClient() {
                 <section className="space-y-5">
                     {/* Selected characters (with weapon) */}
                     <div className="card">
-                        <div
-                            className="text-sm"
-                            style={{ color: "var(--text-muted)" }}
-                        >
+                        <div className="text-sm text-muted-app">
                             Selected characters ({selectedChars.length}/3)
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -338,6 +368,7 @@ export default function UserMultiSuggestClient() {
                                     style={{
                                         borderColor: "var(--border)",
                                         background: "var(--surface)",
+                                        color: "var(--text)",
                                     }}
                                 >
                                     <img
@@ -363,8 +394,12 @@ export default function UserMultiSuggestClient() {
                             {selectedChars.length > 0 && (
                                 <button
                                     onClick={() => setSelectedChars([])}
-                                    className="rounded-xl border px-2 py-1 text-xs hover:opacity-80"
-                                    style={{ borderColor: "var(--border)" }}
+                                    className="rounded-xl border px-2 py-1 text-xs transition"
+                                    style={{
+                                        borderColor: "var(--border)",
+                                        background: "var(--surface)",
+                                        color: "var(--text)",
+                                    }}
                                 >
                                     Clear all
                                 </button>
@@ -375,13 +410,20 @@ export default function UserMultiSuggestClient() {
                     {/* Search + character grid (collapsible) */}
                     <details className="card" open>
                         <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
-                            Character catalog
-                            <span className="text-xs opacity-70">({filteredChars.length})</span>
+                            Character catalog{" "}
+                            <span className="text-xs text-muted-app">
+                                ({filteredChars.length})
+                            </span>
                         </summary>
 
                         <div className="mt-3">
                             <input
-                                className="w-72 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                                className="w-72 rounded-xl border px-3 py-2 text-sm outline-none placeholder-white/50"
+                                style={{
+                                    borderColor: "var(--border)",
+                                    background: "var(--surface)",
+                                    color: "var(--text)",
+                                }}
                                 placeholder="Search characters"
                                 value={charQ}
                                 onChange={(e) => setCharQ(e.target.value)}
@@ -393,7 +435,7 @@ export default function UserMultiSuggestClient() {
                                 <button
                                     key={c.id}
                                     onClick={() => openPickerFor(c)}
-                                    className="card flex flex-col items-center gap-2 hover:opacity-90"
+                                    className="card flex flex-col items-center gap-2 transition hover:opacity-90"
                                 >
                                     <img
                                         src={c.imageUrl}
@@ -403,7 +445,7 @@ export default function UserMultiSuggestClient() {
                                     <div className="text-xs font-medium">
                                         {c.name}
                                     </div>
-                                    <div className="text-[10px] opacity-70">
+                                    <div className="text-[10px] text-muted-app">
                                         {c.weapons.join(" · ")}
                                     </div>
                                 </button>
@@ -413,30 +455,29 @@ export default function UserMultiSuggestClient() {
 
                     {/* Results */}
                     {selectedChars.length === 0 ? (
-                        <div className="mt-6 text-white/60 text-sm">
-                            Pick 1–3 characters and optionally weapons to see recommendations.
+                        <div className="mt-6 text-sm text-muted-app">
+                            Pick 1–3 characters and optionally weapons to see
+                            recommendations.
                         </div>
                     ) : selectedChars.length < 3 ? (
                         <>
-                            <div className="text-sm text-white/80 mb-2">
-                                Recommended comps based on {selectedChars.length} selected
+                            <div className="text-sm text-muted-app mb-2">
+                                Recommended comps based on{" "}
+                                {selectedChars.length} selected
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {suggestionsByChar.map((s, i) => (
                                     <CompSuggestionCard
                                         key={i}
                                         s={s}
-                                        nameById={(id) =>
-                                            UNIVERSE.find((x) => x.id === id)
-                                                ?.name || `ID ${id}`
-                                        }
+                                        nameById={nameById}
                                     />
                                 ))}
                             </div>
                         </>
                     ) : (
                         <>
-                            <div className="text-sm text-white/80 mb-2">
+                            <div className="text-sm text-muted-app mb-2">
                                 Performance of the selected trio
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -444,10 +485,7 @@ export default function UserMultiSuggestClient() {
                                     <CompSuggestionCard
                                         key={i}
                                         s={s}
-                                        nameById={(id) =>
-                                            UNIVERSE.find((x) => x.id === id)
-                                                ?.name || `ID ${id}`
-                                        }
+                                        nameById={nameById}
                                     />
                                 ))}
                             </div>

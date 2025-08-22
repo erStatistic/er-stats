@@ -1,3 +1,4 @@
+// components/CompCard.tsx
 "use client";
 
 import React from "react";
@@ -19,9 +20,8 @@ export default function CompCard({
     return (
         <article
             className="
-        w-[min(92vw,560px)]
-        rounded-2xl overflow-hidden border border-white/10 bg-[#121826]
-        shadow-[0_10px_30px_rgba(0,0,0,0.35)]
+        card w-[min(92vw,560px)] p-0
+        shadow-[0_10px_30px_rgba(0,0,0,0.15)]
         transition-transform duration-300 hover:-translate-y-0.5
       "
         >
@@ -33,7 +33,7 @@ export default function CompCard({
             </header>
 
             {/* 캐릭터 3명 (중앙 강조) */}
-            <div className="flex items-end justify-center gap-3 sm:gap-5 px-4 sm:px-6 py-6 bg-[#0E1422]">
+            <div className="flex items-end justify-center gap-3 sm:gap-5 px-4 sm:px-6 py-6 bg-muted">
                 {comp.comp.map((id, idx) => {
                     const c = getChar(id);
                     if (!c) return null;
@@ -46,11 +46,17 @@ export default function CompCard({
                                 className={
                                     "rounded-full object-cover border-4 " +
                                     (big
-                                        ? "w-24 h-24 sm:w-28 sm:h-28 border-yellow-400"
-                                        : "w-16 h-16 sm:w-20 sm:h-20 border-white/20 opacity-90")
+                                        ? "w-24 h-24 sm:w-28 sm:h-28"
+                                        : "w-16 h-16 sm:w-20 sm:h-20 opacity-90")
                                 }
+                                style={{
+                                    // 가운데는 브랜드 컬러 테두리, 나머지는 테마 보더
+                                    borderColor: big
+                                        ? "var(--brand)"
+                                        : "var(--border)",
+                                }}
                             />
-                            <p className="mt-2 text-[11px] sm:text-xs text-white/80 max-w-[8ch] truncate">
+                            <p className="mt-2 text-[11px] sm:text-xs text-muted-app max-w-[10ch] truncate">
                                 {c.name}
                             </p>
                         </div>
@@ -59,7 +65,7 @@ export default function CompCard({
             </div>
 
             {/* 수치 영역: 승률/픽률/MMR/게임 수 */}
-            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-6 py-4 bg-[#121826] text-white">
+            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-6 py-4 bg-surface text-app">
                 <StatBlock
                     label="승률"
                     value={`${(comp.winRate * 100).toFixed(1)}%`}
@@ -102,12 +108,12 @@ function StatBlock({
     barClass: string;
 }) {
     return (
-        <div className="rounded-xl border border-white/10 bg-[#0E1422] px-3 py-3">
-            <div className="text-[11px] sm:text-xs text-white/60">{label}</div>
-            <div className="mt-0.5 text-base sm:text-lg font-semibold">
+        <div className="card px-3 py-3">
+            <div className="text-[11px] sm:text-xs text-muted-app">{label}</div>
+            <div className="mt-0.5 text-base sm:text-lg font-semibold text-app">
                 {value}
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="mt-2 h-1.5 rounded-full overflow-hidden bg-elev-10">
                 <div
                     className={`h-full ${barClass}`}
                     style={{

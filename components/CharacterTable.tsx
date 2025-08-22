@@ -27,30 +27,58 @@ export default function CharacterTable({
         () => sortRows(rows, sortKey, sortDir),
         [rows, sortKey, sortDir],
     );
-    const honeySet = useMemo(() => honeyIds ?? computeHoneySet(rows, 3).ids, [honeyIds, rows]);
+
+    // 허니 배지 집합: 외부에서 주면 그걸 쓰고, 없으면 내부 계산
+    const honeySet = useMemo(
+        () => honeyIds ?? computeHoneySet(rows, 3).ids,
+        [honeyIds, rows],
+    );
+
+    // 생존 시간 필드 존재 여부(있을 때만 값 렌더)
+    const hasSurvival = useMemo(
+        () => rows.some((r: any) => r?.survivalTime != null),
+        [rows],
+    );
+
+    const columns: SortKey[] = useMemo(() => {
+        const base: SortKey[] = [
+            "tier",
+            "name",
+            "weapon",
+            "winRate",
+            "pickRate",
+            "mmrGain",
+        ];
+        return hasSurvival ? ([...base, "survivalTime"] as SortKey[]) : base;
+    }, [hasSurvival]);
+
+    const labelFor = (col: SortKey) =>
+        col === "tier"
+            ? "티어"
+            : col === "name"
+              ? "이름"
+              : col === "weapon"
+                ? "무기"
+                : col === "winRate"
+                  ? "승률"
+                  : col === "pickRate"
+                    ? "픽률"
+                    : col === "mmrGain"
+                      ? "평균 MMR"
+                      : "생존 시간";
 
     return (
-        <div className="overflow-auto rounded-xl border border-white/10 max-h-[70vh] overscroll-contain">
-            <table className="min-w-full text-sm">
-                <thead className="bg-[#0E1730] text-white/80 sticky top-0">
+        <div className="rounded-xl border border-app overflow-auto max-h-[70vh] overscroll-contain bg-surface">
+            <table className="min-w-full text-sm text-app">
+                <thead className="sticky top-0 bg-muted text-muted-app">
                     <tr>
-                        {(
-                            [
-                                "tier",
-                                "name",
-                                "weapon",
-                                "winRate",
-                                "pickRate",
-                                "mmrGain",
-                                "survivalTime",
-                            ] as SortKey[]
-                        ).map((col) => (
+                        {columns.map((col) => (
                             <th
                                 key={col}
                                 className="whitespace-nowrap px-3 py-2 text-left font-medium"
                             >
                                 <button
-                                    className="inline-flex items-center gap-1"
+                                    className="inline-flex items-center gap-1 hover:opacity-80"
                                     onClick={() => {
                                         setSortKey(col);
                                         setSortDir((prev) =>
@@ -60,20 +88,8 @@ export default function CharacterTable({
                                         );
                                     }}
                                 >
-                                    {col === "tier"
-                                        ? "티어"
-                                        : col === "name"
-                                          ? "이름"
-                                          : col === "weapon"
-                                            ? "무기"
-                                            : col === "winRate"
-                                              ? "승률"
-                                              : col === "pickRate"
-                                                ? "픽률"
-                                                : col === "mmrGain"
-                                                  ? "평균 MMR"
-                                                  : "생존 시간"}
-                                    <span className="text-xs text-white/40">
+                                    {labelFor(col)}
+                                    <span className="text-xs text-muted-app">
                                         {sortKey === col
                                             ? sortDir === "asc"
                                                 ? "▲"
@@ -85,25 +101,35 @@ export default function CharacterTable({
                         ))}
                     </tr>
                 </thead>
-                <tbody className="bg-[#141F3A]">
+
+                <tbody className="bg-surface">
                     {sorted.map((r) => (
                         <tr
                             key={r.id}
-                            className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
+                            className="border-t border-app hover:bg-elev-10 cursor-pointer"
                             onClick={() => onSelect(r.id)}
                         >
-                            <td className="whitespace-nowrap px-3 py-2 flex items-center gap-1">
-                                <TierPill tier={r.tier} />
-                                {honeySet.has(r.id) && (
-                                    <HoneyBadge title="상위 10% (대표무기 기준)" />
-                                )}
+                            {/* 티어(+허니) */}
+                            <td className="whitespace-nowrap px-3 py-2">
+                                <div className="flex items-center gap-1">
+                                    <TierPill tier={r.tier} />
+                                    {honeySet.has(r.id) && (
+                                        <HoneyBadge title="상위 10% (대표무기 기준)" />
+                                    )}
+                                </div>
                             </td>
+
+                            {/* 이름 */}
                             <td className="whitespace-nowrap px-3 py-2">
                                 {r.name}
                             </td>
+
+                            {/* 무기 */}
                             <td className="whitespace-nowrap px-3 py-2">
                                 {r.weapon}
                             </td>
+
+                            {/* 승률 / 픽률 / MMR */}
                             <td className="whitespace-nowrap px-3 py-2">
                                 {formatPercent(r.winRate)}
                             </td>
@@ -113,25 +139,36 @@ export default function CharacterTable({
                             <td className="whitespace-nowrap px-3 py-2">
                                 {formatMMR(r.mmrGain, 1)}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-2">
-                                {formatMMR(r.mmrGain, 1)}
-                            </td>
+
+                            {/* 생존 시간(있을 때만 값, 없으면 대시) */}
+                            {hasSurvival && (
+                                <td className="whitespace-nowrap px-3 py-2">
+                                    {(() => {
+                                        const v = (r as any).survivalTime;
+                                        if (v == null) return "—";
+                                        // 숫자면 소수 1자리 (서버에서 mm:ss 변환해 주면 그대로 표시)
+                                        return typeof v === "number"
+                                            ? `${v.toFixed(1)}`
+                                            : String(v);
+                                    })()}
+                                </td>
+                            )}
                         </tr>
                     ))}
                 </tbody>
             </table>
 
             {/* 디버그: P90 표시 */}
-            <div className="px-3 py-2 text-xs text-white/60">
-                P90 win≈{" "}
+            <div className="px-3 py-2 text-xs text-muted-app">
+                P90 win ≈{" "}
                 {(
                     computeTop10Threshold(rows.map((r) => r.winRate)) * 100
                 ).toFixed(1)}
-                % · pick≈{" "}
+                % · pick ≈{" "}
                 {(
                     computeTop10Threshold(rows.map((r) => r.pickRate)) * 100
                 ).toFixed(2)}
-                % · MMR≈{" "}
+                % · MMR ≈{" "}
                 {computeTop10Threshold(rows.map((r) => r.mmrGain)).toFixed(1)}
             </div>
         </div>

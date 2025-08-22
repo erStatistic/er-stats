@@ -1,4 +1,6 @@
+// components/CompsClient.tsx
 "use client";
+
 import { useMemo, useState } from "react";
 import { CompSummary, CharacterSummary } from "@/types";
 import { formatPercent, formatMMR } from "@/lib/stats";
@@ -20,103 +22,127 @@ export default function CompsClient({
     const charMap = useMemo(
         () => Object.fromEntries(characters.map((c) => [c.id, c])),
         [characters],
-    );
+    ) as Record<number, CharacterSummary | undefined>;
 
     const sorted = useMemo(() => {
         const mul = sortDir === "asc" ? 1 : -1;
         return [...initialComps].sort(
-            (a, b) => ((a as any)[sortKey] - (b as any)[sortKey]) * mul,
+            (a, b) =>
+                (((a as any)[sortKey] as number) -
+                    ((b as any)[sortKey] as number)) *
+                mul,
         );
     }, [initialComps, sortKey, sortDir]);
 
+    const headers: { key: SortKey; label: string; right?: boolean }[] = [
+        { key: "winRate", label: "승률", right: true },
+        { key: "pickRate", label: "픽률", right: true },
+        { key: "mmrGain", label: "평균 MMR", right: true },
+        { key: "count", label: "표본", right: true },
+    ];
+
+    const nextDir = (col: SortKey) =>
+        sortKey === col ? (sortDir === "asc" ? "desc" : "asc") : "desc";
+
     return (
-        <div className="mx-auto max-w-5xl px-4 py-6 text-white">
+        <div className="text-app">
             <h1 className="mb-4 text-xl font-semibold">캐릭터 조합 통계</h1>
 
-            <div className="overflow-auto rounded-xl border border-white/10 bg-[#111A2E]">
+            <div className="card p-0 overflow-auto">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-[#0E1730] text-white/80">
-                        <tr>
-                            <th className="px-3 py-2 text-left">조합</th>
-                            {(
-                                [
-                                    "winRate",
-                                    "pickRate",
-                                    "mmrGain",
-                                    "count",
-                                ] as SortKey[]
-                            ).map((col) => (
-                                <th key={col} className="px-3 py-2 text-left">
-                                    <button
-                                        className="inline-flex items-center gap-1"
-                                        onClick={() => {
-                                            setSortKey(col);
-                                            setSortDir((prev) =>
-                                                sortKey === col &&
-                                                prev === "asc"
-                                                    ? "desc"
-                                                    : "asc",
-                                            );
-                                        }}
+                    <thead className="sticky top-0 bg-muted">
+                        <tr className="text-muted-app">
+                            <th className="px-3 py-2 text-left font-medium">
+                                조합
+                            </th>
+                            {headers.map(({ key, label, right }) => {
+                                const active = sortKey === key;
+                                const dir = active ? sortDir : undefined;
+                                return (
+                                    <th
+                                        key={key}
+                                        className={`px-3 py-2 ${right ? "text-right" : "text-left"} font-medium`}
+                                        aria-sort={
+                                            active
+                                                ? dir === "asc"
+                                                    ? "ascending"
+                                                    : "descending"
+                                                : "none"
+                                        }
                                     >
-                                        {col === "winRate"
-                                            ? "승률"
-                                            : col === "pickRate"
-                                              ? "픽률"
-                                              : col === "mmrGain"
-                                                ? "평균 MMR"
-                                                : "표본"}
-                                        <span className="text-xs text-white/40">
-                                            {sortKey === col
-                                                ? sortDir === "asc"
-                                                    ? "▲"
-                                                    : "▼"
-                                                : "↕"}
-                                        </span>
-                                    </button>
-                                </th>
-                            ))}
+                                        <button
+                                            className="inline-flex items-center gap-1 hover:opacity-80"
+                                            onClick={() => {
+                                                setSortKey(key);
+                                                setSortDir(nextDir(key));
+                                            }}
+                                        >
+                                            {label}
+                                            <span className="text-xs text-muted-app">
+                                                {active
+                                                    ? dir === "asc"
+                                                        ? "▲"
+                                                        : "▼"
+                                                    : "↕"}
+                                            </span>
+                                        </button>
+                                    </th>
+                                );
+                            })}
                         </tr>
                     </thead>
+
                     <tbody>
                         {sorted.map((c, idx) => (
                             <tr
                                 key={idx}
-                                className="border-t border-white/10 hover:bg-white/5"
+                                className="border-t border-app hover:bg-elev-10"
                             >
                                 {/* 조합 칸 */}
-                                <td className="px-3 py-2 flex gap-2">
-                                    {c.comp.map((id) => {
-                                        const char = charMap[id];
-                                        return char ? (
-                                            <div
-                                                key={id}
-                                                className="flex items-center gap-1 rounded bg-[#16223C] px-2 py-1 text-xs"
-                                            >
-                                                <img
-                                                    src={char.imageUrl}
-                                                    alt={char.name}
-                                                    className="h-5 w-5 rounded-full"
-                                                />
-                                                <span>{char.name}</span>
-                                            </div>
-                                        ) : (
-                                            <span key={id}>?</span>
-                                        );
-                                    })}
+                                <td className="px-3 py-2">
+                                    <div className="flex flex-wrap gap-2">
+                                        {c.comp.map((id) => {
+                                            const char = charMap[id];
+                                            return char ? (
+                                                <span
+                                                    key={id}
+                                                    className="inline-flex items-center gap-1 rounded border border-app bg-muted px-2 py-1 text-xs"
+                                                    title={char.name}
+                                                >
+                                                    <img
+                                                        src={char.imageUrl}
+                                                        alt={char.name}
+                                                        className="h-5 w-5 rounded-full object-cover"
+                                                    />
+                                                    <span className="truncate max-w-[12ch]">
+                                                        {char.name}
+                                                    </span>
+                                                </span>
+                                            ) : (
+                                                <span
+                                                    key={id}
+                                                    className="text-muted-app text-xs"
+                                                >
+                                                    ?
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
                                 </td>
 
-                                {/* 승률, 픽률, MMR, 표본 */}
-                                <td className="px-3 py-2">
+                                {/* 승률 / 픽률 / MMR / 표본 */}
+                                <td className="px-3 py-2 text-right">
                                     {formatPercent(c.winRate)}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-3 py-2 text-right">
                                     {formatPercent(c.pickRate)}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-3 py-2 text-right">
                                     {formatMMR(c.mmrGain)}
                                 </td>
-                                <td className="px-3 py-2">{c.count}</td>
+                                <td className="px-3 py-2 text-right">
+                                    {c.count.toLocaleString()}
+                                </td>
                             </tr>
                         ))}
                     </tbody>

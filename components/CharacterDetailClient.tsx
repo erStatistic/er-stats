@@ -1,5 +1,7 @@
 "use client";
+
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { Build, TeamComp, CharacterSummary, WeaponStat } from "@/types";
 import { formatMMR, formatPercent } from "@/lib/stats";
 import TierPill from "@/components/TierPill";
@@ -26,6 +28,7 @@ export default function CharacterDetailClient({
         builds: initBuilds,
         teams: initTeams,
     } = initial;
+
     const [selectedWeapon, setSelectedWeapon] = useState(currentWeapon);
     const [builds, setBuilds] = useState(initBuilds);
     const [teams, setTeams] = useState(initTeams);
@@ -43,12 +46,13 @@ export default function CharacterDetailClient({
     );
 
     return (
-        <div className="mx-auto max-w-5xl px-4 py-6 text-white">
+        <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                     <h1 className="text-2xl font-bold truncate">{r.name}</h1>
                     <TierPill tier={r.tier} />
+                    {/* 무기군 선택 (이름 오른쪽) */}
                     <div className="ml-2 flex items-center gap-1 overflow-x-auto">
                         {variants.map((v) => (
                             <VariantPill
@@ -60,42 +64,61 @@ export default function CharacterDetailClient({
                         ))}
                     </div>
                 </div>
+
                 <button
+                    type="button"
                     onClick={() => router.push("/")}
-                    className="text-xs rounded-lg border border-white/10 px-3 py-2 hover:bg-white/5 whitespace-nowrap"
+                    className="rounded-lg border border-app bg-muted px-3 py-2 text-xs hover:bg-elev-10 whitespace-nowrap"
                 >
                     ← 목록으로
                 </button>
             </div>
 
             {/* 상단 카드들 */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-white/10 bg-[#111A2E] p-4 flex items-center justify-center">
-                    <img
-                        src={r.imageUrl}
+            <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {/* 이미지 */}
+                <div className="card p-4 flex items-center justify-center">
+                    <Image
+                        src={r.imageUrl || `/chars/${r.id % 9 || 1}.png`}
                         alt={`${r.name} 이미지`}
+                        width={160}
+                        height={160}
                         className="h-40 w-40 rounded-xl object-cover"
+                        unoptimized
+                        onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                                "data:image/svg+xml;utf8," +
+                                encodeURIComponent(
+                                    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+                     <rect width="100%" height="100%" fill="#E2E8F0"/>
+                     <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#64748B" font-size="12">No Image</text>
+                   </svg>`,
+                                );
+                        }}
                     />
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-[#111A2E] p-4">
-                    <div className="text-white/60">선택 무기</div>
-                    <div className="text-white font-medium">
-                        {selectedWeapon}
-                    </div>
-                    <div className="mt-3 text-white/60">
+
+                {/* 선택 무기/수치 */}
+                <div className="card p-4">
+                    <div className="text-muted-app">선택 무기</div>
+                    <div className="text-app font-medium">{selectedWeapon}</div>
+
+                    <div className="mt-3 text-muted-app">
                         승률 · 픽률 · 획득MMR
                     </div>
-                    <div className="text-white font-medium">
+                    <div className="text-app font-medium">
                         {formatPercent(current.winRate)} ·{" "}
                         {formatPercent(current.pickRate)} ·{" "}
                         {formatMMR(current.mmrGain, 1)}
                     </div>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-[#111A2E] p-4">
-                    <div className="text-white/60">티어</div>
+
+                {/* 티어 */}
+                <div className="card p-4">
+                    <div className="text-muted-app">티어</div>
                     <div className="mt-1 flex items-center gap-2">
-                        <span>{r.tier}</span>
-                        <span className="text-xs text-white/50">
+                        <span className="text-app">{r.tier}</span>
+                        <span className="text-xs text-muted-app">
                             (최근 14일, 프리뷰)
                         </span>
                     </div>
@@ -107,23 +130,21 @@ export default function CharacterDetailClient({
                 <h2 className="text-lg font-semibold mb-2">
                     {selectedWeapon} 추천 빌드
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {builds.map((b) => (
-                        <div
-                            key={b.id}
-                            className="rounded-xl border border-white/10 bg-[#111A2E] p-4"
-                        >
-                            <div className="text-white font-medium">
+                        <div key={b.id} className="card p-4">
+                            <div className="font-medium text-app">
                                 {b.title}
                             </div>
-                            <div className="text-xs text-white/60 mt-1">
+                            <div className="text-xs text-muted-app mt-1">
                                 {b.description}
                             </div>
+
                             <div className="mt-3 flex flex-wrap gap-1 text-xs">
                                 {b.items.map((it, i) => (
                                     <span
                                         key={i}
-                                        className="rounded-md bg-[#0E1730] border border-white/10 px-2 py-1"
+                                        className="muted-strip px-2 py-1"
                                     >
                                         {it}
                                     </span>
@@ -139,23 +160,21 @@ export default function CharacterDetailClient({
                 <h2 className="text-lg font-semibold mb-2">
                     {selectedWeapon} 추천 팀 조합
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {teams.map((t) => (
-                        <div
-                            key={t.id}
-                            className="rounded-xl border border-white/10 bg-[#111A2E] p-4"
-                        >
-                            <div className="text-white font-medium">
+                        <div key={t.id} className="card p-4">
+                            <div className="font-medium text-app">
                                 {t.title}
                             </div>
-                            <div className="text-xs text-white/60 mt-1">
+                            <div className="text-xs text-muted-app mt-1">
                                 {t.note || "—"}
                             </div>
+
                             <div className="mt-3 flex flex-wrap gap-1 text-xs">
                                 {t.members.map((m) => (
                                     <span
                                         key={m.id}
-                                        className="rounded-md bg-[#0E1730] border border-white/10 px-2 py-1"
+                                        className="muted-strip px-2 py-1"
                                     >
                                         {m.name}
                                     </span>

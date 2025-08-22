@@ -24,12 +24,11 @@ function getRankTier(r: CharacterSummary): GameTier {
     const labels = GAME_TIERS as readonly string[];
     if (r.rankTier && labels.includes(r.rankTier))
         return r.rankTier as GameTier;
-    // 임시 분배: id로 안정적 그룹화
-    const idx = r.id % (labels.length - 1); // All 제외 4개
-    return labels[idx + 1] as GameTier; // Diamond+부터
+    const idx = r.id % (labels.length - 1); // All 제외
+    return labels[idx + 1] as GameTier;
 }
 
-// 간단한 탭 컴포넌트 (Tailwind)
+// 간단 탭
 function Tabs({
     value,
     onChange,
@@ -40,16 +39,21 @@ function Tabs({
     items: readonly GameTier[];
 }) {
     return (
-        <div className="flex items-center gap-1 rounded-xl bg-[#0F1830] p-1 border border-white/10">
+        <div className="flex items-center gap-1 rounded-xl border border-app bg-muted p-1">
             {items.map((it) => {
                 const active = it === value;
                 return (
                     <button
                         key={it}
                         onClick={() => onChange(it)}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition
-              ${active ? "bg-white/20 text-white border border-white/30" : "text-white/70 hover:bg-white/10 border border-transparent"}`}
+                        className={
+                            "px-3 py-1.5 text-xs rounded-lg border transition " +
+                            (active
+                                ? "bg-surface border-app text-app font-medium"
+                                : "bg-transparent border-transparent text-muted-app hover:bg-elev-10")
+                        }
                         title={it}
+                        aria-pressed={active}
                     >
                         {it}
                     </button>
@@ -84,14 +88,17 @@ export default function HomeClient({
         });
     }, [q, gameTier, patchedRows]);
 
+    // 허니셋: 필터된 목록에서 산출 (표와 뱃지 일관)
     const honey = useMemo(() => computeHoneySet(filtered, 3), [filtered]);
 
-    // 허니 배지 필터 적용된 가시 목록
+    // 허니 전용 보기 적용
     const visibleRows = useMemo(
-        () => (honeyOnly ? filtered.filter((r) => honey.ids.has(r.id)) : filtered),
+        () =>
+            honeyOnly ? filtered.filter((r) => honey.ids.has(r.id)) : filtered,
         [filtered, honeyOnly, honey],
     );
 
+    // 선택된 행 (현재 가시 목록 기준)
     const selected = useMemo(
         () =>
             selectedId == null
@@ -108,15 +115,13 @@ export default function HomeClient({
     const leftSpan = selected ? "lg:col-span-3" : "lg:col-span-5";
 
     return (
-        <main className="mx-auto max-w-5xl flex-1 px-4 py-6 grid grid-cols-1 gap-4 lg:grid-cols-5 pb-20">
+        <main className="mx-auto max-w-5xl grid grid-cols-1 gap-4 lg:grid-cols-5 pb-20">
             {/* 왼쪽: 목록 */}
-            <section
-                className={`rounded-2xl border border-white/10 bg-[#111A2E] p-4 overflow-hidden ${leftSpan}`}
-            >
+            <section className={`card overflow-hidden ${leftSpan}`}>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     {/* 검색 */}
                     <input
-                        className="w-56 rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none placeholder-white/50"
+                        className="w-56 rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-app text-app"
                         placeholder="실험체 검색"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
@@ -124,7 +129,7 @@ export default function HomeClient({
 
                     {/* 패치 선택 */}
                     <select
-                        className="rounded-xl bg-[#16223C] px-3 py-2 text-sm outline-none"
+                        className="rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none text-app"
                         value={patch}
                         onChange={(e) => {
                             setPatch(e.target.value as Patch);
@@ -156,12 +161,14 @@ export default function HomeClient({
                             setHoneyOnly((prev) => !prev);
                             setSelectedId(null);
                         }}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition border ${
-                            honeyOnly
-                                ? "bg-white/20 text-white border-white/30"
-                                : "text-white/70 hover:bg-white/10 border-white/10"
-                        }`}
+                        className={
+                            "px-3 py-1.5 text-xs rounded-lg border transition " +
+                            (honeyOnly
+                                ? "bg-elev-20 border-app text-app"
+                                : "bg-surface border-app text-muted-app hover:bg-elev-10")
+                        }
                         title="허니 배지 보유만 보기"
+                        aria-pressed={honeyOnly}
                     >
                         <span aria-hidden>🍯</span>
                         <span className="ml-1">허니만</span>
@@ -179,34 +186,30 @@ export default function HomeClient({
 
             {/* 오른쪽: 선택된 경우에만 표시 */}
             {selected && (
-                <section className="rounded-2xl border border-white/10 bg-[#111A2E] p-4 lg:col-span-2">
-                    <div className="mb-2 text-xs text-white/60">
+                <section className="card lg:col-span-2">
+                    <div className="mb-2 text-xs text-muted-app">
                         패치{" "}
-                        <span className="font-medium text-white">{patch}</span>{" "}
-                        · 티어{" "}
-                        <span className="font-medium text-white">
-                            {gameTier}
-                        </span>{" "}
+                        <span className="font-medium text-app">{patch}</span> ·
+                        티어{" "}
+                        <span className="font-medium text-app">{gameTier}</span>{" "}
                         · 기간{" "}
-                        <span className="font-medium text-white">
-                            최근 14일
-                        </span>
+                        <span className="font-medium text-app">최근 14일</span>
                     </div>
 
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-white/80">
+                            <h3 className="text-sm font-semibold text-app">
                                 캐릭터 정보
                             </h3>
                             <div className="flex items-center gap-2">
                                 <button
-                                    className="text-xs rounded-lg border border-white/10 px-2 py-1 hover:bg-white/5"
+                                    className="text-xs rounded-lg border border-app px-2 py-1 hover:bg-elev-10"
                                     onClick={() => goDetail(selected.id)}
                                 >
                                     자세히 보기
                                 </button>
                                 <button
-                                    className="text-xs rounded-lg border border-white/10 px-2 py-1 hover:bg-white/5"
+                                    className="text-xs rounded-lg border border-app px-2 py-1 hover:bg-elev-10"
                                     onClick={() => setSelectedId(null)}
                                 >
                                     닫기
