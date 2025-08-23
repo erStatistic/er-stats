@@ -44,15 +44,22 @@ export default memo(function ClusterCompCard({
         <article
             className="
         w-[min(92vw,560px)]
-        card overflow-hidden
+        card p-0 overflow-hidden
         shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.12)]
         transition-transform duration-300 hover:-translate-y-0.5
       "
             role="group"
             aria-label={`Cluster ${s.clusters.join("-")} 조합`}
         >
-            {/* 상단 배너 (강조용 그라디언트 유지) */}
-            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4 text-center text-white">
+            {/* 상단 배너 (토큰 기반 + 윗모서리만 둥글게) */}
+            <header
+                className="comp-banner rounded-t-2xl px-4 sm:px-6 py-3 sm:py-4 text-center"
+                style={{
+                    // 카드의 radius와 항상 동일하게 상단만 상속
+                    borderTopLeftRadius: "inherit",
+                    borderTopRightRadius: "inherit",
+                }}
+            >
                 <h3 className="text-base sm:text-lg font-bold tracking-wide">
                     {title}
                 </h3>
@@ -92,13 +99,13 @@ export default memo(function ClusterCompCard({
                 <Stat
                     label="평균 MMR"
                     value={s.mmrGain.toFixed(1)}
-                    bar={Math.min(1, s.mmrGain / 20)} // 프리뷰 스케일
+                    bar={Math.min(1, s.mmrGain / 20)}
                     barClass="bg-purple-500"
                 />
                 <Stat
                     label="게임 수"
                     value={s.count.toLocaleString()}
-                    bar={Math.min(1, s.count / 500)} // 프리뷰 스케일
+                    bar={Math.min(1, s.count / 500)}
                     barClass="bg-amber-400"
                 />
             </section>

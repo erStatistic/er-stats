@@ -20,14 +20,14 @@ export default function CompCard({
     return (
         <article
             className="
-        card w-[min(92vw,560px)] p-0
+        card w-[min(92vw,560px)] p-0 overflow-hidden
         shadow-[0_10px_30px_rgba(0,0,0,0.15)]
         transition-transform duration-300 hover:-translate-y-0.5
       "
         >
-            {/* 상단 배너 */}
-            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4 text-center">
-                <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
+            {/* 상단 배너: 전역 토큰 사용 */}
+            <header className="comp-banner px-4 sm:px-6 py-3 sm:py-4 text-center">
+                <h3 className="text-base sm:text-lg font-bold tracking-wide">
                     {title}
                 </h3>
             </header>
@@ -50,7 +50,6 @@ export default function CompCard({
                                         : "w-16 h-16 sm:w-20 sm:h-20 opacity-90")
                                 }
                                 style={{
-                                    // 가운데는 브랜드 컬러 테두리, 나머지는 테마 보더
                                     borderColor: big
                                         ? "var(--brand)"
                                         : "var(--border)",
@@ -64,7 +63,7 @@ export default function CompCard({
                 })}
             </div>
 
-            {/* 수치 영역: 승률/픽률/MMR/게임 수 */}
+            {/* 수치 영역 */}
             <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 px-4 sm:px-6 py-4 bg-surface text-app">
                 <StatBlock
                     label="승률"

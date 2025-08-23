@@ -38,8 +38,16 @@ export default function PatchCharacterCard({
 
     return (
         <article className="card p-0 overflow-hidden hover:-translate-y-0.5 transition-transform">
-            {/* 헤더 */}
-            <header className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center gap-3">
+            {/* 헤더: 토큰 기반 배너 (라이트/다크 모두 조화) */}
+            <header
+                className="comp-banner rounded-t-2xl px-4 py-3 flex items-center gap-3"
+                style={{
+                    // 카드 모서리와 항상 동일하게 유지
+                    borderTopLeftRadius: "inherit",
+                    borderTopRightRadius: "inherit",
+                    // 전역 토큰이 없다면 라이트 친화적인 그라디언트를 폴백으로 사용
+                }}
+            >
                 <img
                     src={data.imageUrl}
                     alt={data.name}
@@ -49,9 +57,8 @@ export default function PatchCharacterCard({
                     className="w-10 h-10 rounded-xl object-cover border border-app bg-muted"
                 />
                 <div className="min-w-0 flex-1">
-                    <h3 className="font-bold text-white truncate">
-                        {data.name}
-                    </h3>
+                    {/* text-white 제거 → 배너 토큰 색상 사용 */}
+                    <h3 className="font-bold truncate">{data.name}</h3>
                     <div className="mt-1 flex flex-wrap gap-1">
                         {data.badges.map((b) => (
                             <span

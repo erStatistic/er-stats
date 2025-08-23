@@ -18,6 +18,9 @@
     --text-muted: #64748b;
     --brand: #00d1b2;
     color-scheme: light dark;
+    --comp-banner-from: #818cf8; /* indigo-400 */
+    --comp-banner-to: #d946ef; /* fuchsia-500 */
+    --comp-banner-text: #ffffff;
 }
 .dark {
     /* Dark */
@@ -30,6 +33,9 @@
     --text-2: rgba(255, 255, 255, 0.85);
     --text-muted: rgba(255, 255, 255, 0.7);
     --brand: #00d1b2;
+    --comp-banner-from: #4338ca; /* indigo-700 */
+    --comp-banner-to: #7e22ce; /* purple-700 */
+    --comp-banner-text: #ffffff;
 }
 
 /* Base */
@@ -98,6 +104,15 @@ body {
 /*   Components          */
 /* ===================== */
 @layer components {
+    .comp-banner {
+        /* 카드 모서리 안에서 깔끔하게 보이도록 */
+        color: var(--comp-banner-text);
+        background-image: linear-gradient(
+            90deg,
+            var(--comp-banner-from),
+            var(--comp-banner-to)
+        );
+    }
     .card {
         @apply rounded-2xl border p-4 transition-colors;
         background: var(--surface);

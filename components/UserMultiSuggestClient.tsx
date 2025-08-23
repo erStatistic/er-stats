@@ -1,4 +1,3 @@
-// components/UserMultiSuggestClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -8,11 +7,13 @@ import { toast } from "sonner";
 import CharacterWeaponPicker, {
     CharItem,
 } from "@/components/CharacterWeaponPicker";
+import SegmentedTabs, { SegTab } from "@/components/ui/SegmentedTabs";
+import UserAddForm from "@/components/users/UserAddForm";
+import AddedUsersList from "@/components/users/AddedUsersList";
 
-// -------------------- 데모 유니버스: 캐릭터별 무기군 포함 --------------------
+/* ---------- 데모 유니버스 ---------- */
 const UNIVERSE: CharItem[] = Array.from({ length: 24 }).map((_, i) => {
     const id = i + 1;
-    // 데모용 무기군: 다양하게 섞음
     const pool = [
         ["Axe", "Pistol"],
         ["Bow", "Rapier"],
@@ -30,7 +31,7 @@ const UNIVERSE: CharItem[] = Array.from({ length: 24 }).map((_, i) => {
     };
 });
 
-// -------------------- 해시/모의 통계 --------------------
+/* ---------- 모의 통계/추천 ---------- */
 function hash(s: string) {
     let h = 0;
     for (let i = 0; i < s.length; i++) {
@@ -42,12 +43,12 @@ function hash(s: string) {
 function scoreFromIds(ids: number[]) {
     return hash(ids.sort((a, b) => a - b).join("-"));
 }
+function rnd(seed: number, a: number, b: number) {
+    const r = Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1;
+    return a + (b - a) * r;
+}
 function compStats(comp: number[]) {
     const s = scoreFromIds(comp);
-    const rnd = (seed: number, a: number, b: number) => {
-        const r = Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1;
-        return a + (b - a) * r;
-    };
     return {
         winRate: rnd(s, 0.46, 0.65),
         pickRate: rnd(s + 13, 0.05, 0.2),
@@ -56,7 +57,6 @@ function compStats(comp: number[]) {
     };
 }
 
-// -------------------- 유저 조회 (데모) --------------------
 async function fetchUserProfileMock(name: string): Promise<UserProfile> {
     const idx = Math.abs(hash(name)) % UNIVERSE.length;
     const top = [
@@ -74,16 +74,14 @@ async function fetchUserProfileMock(name: string): Promise<UserProfile> {
     };
 }
 
-// -------------------- Character-based recommendations --------------------
 function recommendForChars(
     partial: { id: number; weapon?: string }[],
     opts: { topK?: number; poolLimit?: number } = {},
 ) {
     const topK = opts.topK ?? 8;
     const poolLimit = opts.poolLimit ?? UNIVERSE.length;
-
     const ids = partial.map((p) => p.id);
-    // Exactly 3 → 그 조합 하나만 리턴
+
     if (partial.length === 3) {
         const { winRate, pickRate, mmrGain, count } = compStats(ids);
         return [
@@ -103,14 +101,11 @@ function recommendForChars(
         ] as CompSuggestion[];
     }
 
-    // 후보 풀
     const pool = UNIVERSE.map((x) => x.id)
         .slice(0, poolLimit)
         .filter((id) => !ids.includes(id));
 
     const out: CompSuggestion[] = [];
-
-    // 1명 고정 → 2자리 채우기 / 2명 고정 → 1자리 채우기
     for (let i = 0; i < pool.length && out.length < topK * 2; i++) {
         if (partial.length === 1) {
             for (let j = i + 1; j < pool.length && out.length < topK * 2; j++) {
@@ -154,7 +149,7 @@ function recommendForChars(
     return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
 }
 
-// -------------------- Main component --------------------
+/* ---------- 메인 컴포넌트 ---------- */
 type Tab = "user" | "character";
 type SelectedChar = {
     id: number;
@@ -162,6 +157,11 @@ type SelectedChar = {
     imageUrl: string;
     weapon?: string;
 };
+
+const TABS: SegTab[] = [
+    { value: "user", label: "By User" },
+    { value: "character", label: "By Character" },
+];
 
 export default function UserMultiSuggestClient() {
     const [tab, setTab] = useState<Tab>("user");
@@ -173,23 +173,32 @@ export default function UserMultiSuggestClient() {
 
     // 캐릭터 기준
     const [charQ, setCharQ] = useState("");
-    const [selectedChars, setSelectedChars] = useState<SelectedChar[]>([]); // 최대 3개
+    const [selectedChars, setSelectedChars] = useState<SelectedChar[]>([]);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState<CharItem | null>(null);
 
-    // Add user
+    // 중복 판정
+    const normalizedInput = input.trim().toLowerCase();
+    const isDuplicateNow = users.some(
+        (u) => u.name.trim().toLowerCase() === normalizedInput,
+    );
+
+    // 유저 추가
     const addUser = async () => {
-        const name = input.trim();
-        if (!name) return;
-        if (users.length >= 3) return toast.error("You can add up to 3 users.");
-        if (users.some((u) => u.name.toLowerCase() === name.toLowerCase()))
-            return toast.error(`"${name}" is already added.`);
+        const displayName = input.trim();
+        if (!displayName) return;
+        if (isDuplicateNow) {
+            // 중복이면 추가하지 않고 입력만 비움
+            setInput("");
+            return;
+        }
+        if (users.length >= 3) return;
+
         setLoading(true);
         try {
-            const u = await fetchUserProfileMock(name);
+            const u = await fetchUserProfileMock(displayName);
             setUsers((prev) => [...prev, u]);
             setInput("");
-            toast.success(`Added "${name}"`);
         } catch {
             toast.error("Failed to fetch user info.");
         } finally {
@@ -199,7 +208,7 @@ export default function UserMultiSuggestClient() {
     const removeUser = (name: string) =>
         setUsers((p) => p.filter((u) => u.name !== name));
 
-    // Character search + grid
+    // 캐릭터 검색/그리드
     const filteredChars = useMemo(() => {
         const term = charQ.trim().toLowerCase();
         const selectedIds = new Set(selectedChars.map((c) => c.id));
@@ -224,7 +233,6 @@ export default function UserMultiSuggestClient() {
             ...prev,
             { id: c.id, name: c.name, imageUrl: c.imageUrl, weapon },
         ]);
-        toast.success(`${c.name} (${weapon}) selected`);
     };
 
     const removeChar = (id: number) =>
@@ -236,7 +244,7 @@ export default function UserMultiSuggestClient() {
         const anchorIds = Array.from(
             new Set(users.flatMap((u) => u.topChars.map((t) => t.id))),
         );
-        const partial = anchorIds.slice(0, 2).map((id) => ({ id })); // 데모: 2명 기준 앵커
+        const partial = anchorIds.slice(0, 2).map((id) => ({ id }));
         return recommendForChars(partial, { topK: 8, poolLimit: 24 });
     }, [users]);
 
@@ -252,84 +260,29 @@ export default function UserMultiSuggestClient() {
         UNIVERSE.find((x) => x.id === id)?.name || `ID ${id}`;
 
     return (
-        <div>
-            {/* Tabs */}
-            <div className="mb-4 flex gap-2">
-                <button
-                    className="rounded-xl border px-4 py-2 text-sm transition-colors"
-                    style={{
-                        borderColor: "var(--border)",
-                        background:
-                            tab === "user" ? "var(--muted)" : "var(--surface)",
-                        color: "var(--text)",
-                    }}
-                    onClick={() => setTab("user")}
-                >
-                    By User
-                </button>
-                <button
-                    className="rounded-xl border px-4 py-2 text-sm transition-colors"
-                    style={{
-                        borderColor: "var(--border)",
-                        background:
-                            tab === "character"
-                                ? "var(--muted)"
-                                : "var(--surface)",
-                        color: "var(--text)",
-                    }}
-                    onClick={() => setTab("character")}
-                >
-                    By Character
-                </button>
-            </div>
+        <div className="text-app">
+            {/* 탭바 (PatchClient 스타일) */}
+            <SegmentedTabs
+                tabs={TABS}
+                value={tab}
+                onChange={(v) => setTab(v as Tab)}
+                ariaLabel="추천 기준 선택"
+            />
 
             {/* ============== User tab ============== */}
             {tab === "user" && (
                 <section className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <input
-                            className="w-64 rounded-xl border px-3 py-2 text-sm outline-none placeholder-white/50"
-                            style={{
-                                borderColor: "var(--border)",
-                                background: "var(--surface)",
-                                color: "var(--text)",
-                            }}
-                            placeholder="User nickname (up to 3)"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && addUser()}
-                        />
-                        <button
-                            onClick={addUser}
-                            className="rounded-xl border px-4 py-2 text-sm transition"
-                            style={{
-                                borderColor: "var(--border)",
-                                background: "var(--surface)",
-                                color: "var(--text)",
-                            }}
-                            disabled={
-                                loading || !input.trim() || users.length >= 3
-                            }
-                            title={
-                                users.length >= 3 ? "Max 3 users" : undefined
-                            }
-                        >
-                            {loading ? "Adding..." : "Add user"}
-                        </button>
-                        {users.length > 0 && (
-                            <button
-                                onClick={() => setUsers([])}
-                                className="ml-2 rounded-xl border px-3 py-2 text-xs transition"
-                                style={{
-                                    borderColor: "var(--border)",
-                                    background: "var(--surface)",
-                                    color: "var(--text)",
-                                }}
-                            >
-                                Clear all
-                            </button>
-                        )}
-                    </div>
+                    <UserAddForm
+                        input={input}
+                        setInput={setInput}
+                        loading={loading}
+                        usersLength={users.length}
+                        isDuplicate={isDuplicateNow}
+                        onAdd={addUser}
+                        onClearAll={() => setUsers([])}
+                    />
+
+                    <AddedUsersList users={users} onRemove={removeUser} />
 
                     {users.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -345,7 +298,10 @@ export default function UserMultiSuggestClient() {
                             ))}
                         </div>
                     ) : (
-                        <div className="mt-10 text-sm text-muted-app">
+                        <div
+                            className="mt-10 text-sm"
+                            style={{ color: "var(--text-muted)" }}
+                        >
                             Add 1–3 users to see personalized team suggestions.
                         </div>
                     )}
@@ -355,9 +311,12 @@ export default function UserMultiSuggestClient() {
             {/* ============== Character tab ============== */}
             {tab === "character" && (
                 <section className="space-y-5">
-                    {/* Selected characters (with weapon) */}
+                    {/* Selected characters */}
                     <div className="card">
-                        <div className="text-sm text-muted-app">
+                        <div
+                            className="text-sm"
+                            style={{ color: "var(--text-muted)" }}
+                        >
                             Selected characters ({selectedChars.length}/3)
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -407,18 +366,21 @@ export default function UserMultiSuggestClient() {
                         </div>
                     </div>
 
-                    {/* Search + character grid (collapsible) */}
+                    {/* Catalog */}
                     <details className="card" open>
                         <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
                             Character catalog{" "}
-                            <span className="text-xs text-muted-app">
+                            <span
+                                className="text-xs"
+                                style={{ color: "var(--text-muted)" }}
+                            >
                                 ({filteredChars.length})
                             </span>
                         </summary>
 
                         <div className="mt-3">
                             <input
-                                className="w-72 rounded-xl border px-3 py-2 text-sm outline-none placeholder-white/50"
+                                className="w-72 rounded-xl border px-3 py-2 text-sm outline-none"
                                 style={{
                                     borderColor: "var(--border)",
                                     background: "var(--surface)",
@@ -445,7 +407,10 @@ export default function UserMultiSuggestClient() {
                                     <div className="text-xs font-medium">
                                         {c.name}
                                     </div>
-                                    <div className="text-[10px] text-muted-app">
+                                    <div
+                                        className="text-[10px]"
+                                        style={{ color: "var(--text-muted)" }}
+                                    >
                                         {c.weapons.join(" · ")}
                                     </div>
                                 </button>
@@ -455,13 +420,19 @@ export default function UserMultiSuggestClient() {
 
                     {/* Results */}
                     {selectedChars.length === 0 ? (
-                        <div className="mt-6 text-sm text-muted-app">
+                        <div
+                            className="mt-6 text-sm"
+                            style={{ color: "var(--text-muted)" }}
+                        >
                             Pick 1–3 characters and optionally weapons to see
                             recommendations.
                         </div>
                     ) : selectedChars.length < 3 ? (
                         <>
-                            <div className="text-sm text-muted-app mb-2">
+                            <div
+                                className="text-sm mb-2"
+                                style={{ color: "var(--text-muted)" }}
+                            >
                                 Recommended comps based on{" "}
                                 {selectedChars.length} selected
                             </div>
@@ -477,7 +448,10 @@ export default function UserMultiSuggestClient() {
                         </>
                     ) : (
                         <>
-                            <div className="text-sm text-muted-app mb-2">
+                            <div
+                                className="text-sm mb-2"
+                                style={{ color: "var(--text-muted)" }}
+                            >
                                 Performance of the selected trio
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

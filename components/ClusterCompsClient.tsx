@@ -28,6 +28,14 @@ export default function ClusterCompsClient({
     const [tier, setTier] = useState<GameTier>("All");
     const [sort, setSort] = useState<"wr" | "pick" | "mmr" | "count">("wr");
 
+    // ✅ 캐러셀용 Top3 — 전체 기준(필터 무시)
+    const topOverall = useMemo(() => {
+        const arr = [...initial];
+        arr.sort((a, b) => b.winRate - a.winRate); // 필요시 기준 변경
+        return arr.slice(0, Math.min(3, arr.length));
+    }, [initial]);
+
+    // 🔎 테이블용 필터링
     const filtered = useMemo(() => {
         const qq = q.trim().toLowerCase();
         return initial
@@ -41,6 +49,7 @@ export default function ClusterCompsClient({
             );
     }, [initial, patch, tier, q]);
 
+    // 🔢 테이블용 정렬
     const sorted = useMemo(() => {
         const c = [...filtered];
         c.sort((a, b) => {
@@ -58,22 +67,45 @@ export default function ClusterCompsClient({
         return c;
     }, [filtered, sort]);
 
-    const top = sorted.slice(0, Math.min(3, sorted.length));
-
     return (
         <div className="text-app">
-            {/* 필터 바 */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            {/* Top3 캐러셀 — 전체 기준 (필터 무시) */}
+            {topOverall.length > 0 && (
+                <>
+                    <h2 className="text-lg sm:text-xl font-bold mb-3">
+                        상위 클러스터 조합{" "}
+                        <span className="text-muted-app text-sm">
+                            (전체 기준)
+                        </span>
+                    </h2>
+                    <Carousel
+                        responsiveVisible={{ base: 1.1, md: 1.4, lg: 1.8 }}
+                        autoSlide
+                        interval={4500}
+                        scaleActive={1.05}
+                        scaleInactive={0.9}
+                    >
+                        {topOverall.map((s, i) => (
+                            <ClusterCompCard key={i} s={s} />
+                        ))}
+                    </Carousel>
+                </>
+            )}
+
+            {/* 🔽 필터 바 — 캐러셀 아래, 테이블만 변경 */}
+            <div className="mt-6 mb-4 flex flex-wrap items-center gap-2">
                 <input
                     className="w-44 rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none placeholder:text-muted-app"
                     placeholder="클러스터 검색 (예: ABC)"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
+                    aria-label="클러스터 검색"
                 />
                 <select
                     className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={patch}
                     onChange={(e) => setPatch(e.target.value as Patch)}
+                    aria-label="패치 선택"
                 >
                     {PATCHES.map((p) => (
                         <option key={p} value={p}>
@@ -85,6 +117,7 @@ export default function ClusterCompsClient({
                     className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={tier}
                     onChange={(e) => setTier(e.target.value as GameTier)}
+                    aria-label="티어 선택"
                 >
                     {GAME_TIERS.map((t) => (
                         <option key={t} value={t}>
@@ -96,6 +129,7 @@ export default function ClusterCompsClient({
                     className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
                     value={sort}
                     onChange={(e) => setSort(e.target.value as any)}
+                    aria-label="정렬 기준"
                 >
                     <option value="wr">승률</option>
                     <option value="pick">픽률</option>
@@ -104,28 +138,8 @@ export default function ClusterCompsClient({
                 </select>
             </div>
 
-            {/* Top3 캐러셀 */}
-            {top.length > 0 && (
-                <>
-                    <h2 className="text-lg sm:text-xl font-bold mb-3">
-                        상위 클러스터 조합
-                    </h2>
-                    <Carousel
-                        responsiveVisible={{ base: 1.1, md: 1.4, lg: 1.8 }}
-                        autoSlide
-                        interval={4500}
-                        scaleActive={1.05}
-                        scaleInactive={0.9}
-                    >
-                        {top.map((s, i) => (
-                            <ClusterCompCard key={i} s={s} />
-                        ))}
-                    </Carousel>
-                </>
-            )}
-
-            {/* 리스트 테이블 */}
-            <div className="card mt-8 p-0 overflow-hidden">
+            {/* 리스트 테이블 — 필터/정렬 반영 */}
+            <div className="card p-0 overflow-hidden">
                 <table className="min-w-full text-sm">
                     <thead className="bg-muted">
                         <tr className="text-muted-app">
