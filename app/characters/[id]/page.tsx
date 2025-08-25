@@ -85,29 +85,6 @@ export default async function CharacterDetailPage({
 
     return (
         <>
-            {/* 서버 사이드에서 헤더로 기본 정보 표시 */}
-            <header className="p-6 flex items-center gap-4">
-                {(() => {
-                    const imgSrc = character.imageUrlMini || "/fallback.png"; // ✅ 절대 빈 문자열 금지
-                    return (
-                        <Image
-                            src={imgSrc}
-                            alt={character.nameKr || "캐릭터 이미지"}
-                            width={72}
-                            height={72}
-                            className="size-18 rounded-xl object-contain bg-elev-10"
-                            priority
-                        />
-                    );
-                })()}
-                <div>
-                    <h1 className="text-2xl font-semibold">
-                        {character.nameKr}
-                    </h1>
-                    {/* nameEn은 응답에 없으니 삭제하거나 optional로 처리 */}
-                </div>
-            </header>
-            {/* 클라 컴포넌트에도 전달해서 내부에서 재사용 가능 */}
             <CharacterDetailClient
                 initial={{
                     r,

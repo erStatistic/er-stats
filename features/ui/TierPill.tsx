@@ -3,16 +3,7 @@
 
 import React from "react";
 
-const TIER_COLOR: Record<string, string> = {
-    S: "#8A5CF6", // 보라
-    A: "#00D1B2", // 민트
-    B: "#3DB2FF", // 블루
-    C: "#8B9FB4", // 그레이 톤(기본)
-    D: "#98A6B8",
-    F: "#9CA3AF",
-};
-
-type Tone = "subtle" | "solid";
+import { TIER_COLOR } from "@/features/constants";
 
 export default function TierPill({
     tier,
