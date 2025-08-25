@@ -38,13 +38,18 @@ export function makeMock(
 ): CharacterSummary[] {
     const arr: CharacterSummary[] = [];
     for (let i = 0; i < n; i++) {
-        const winRate = 0.4 + rng() * 0.2;
-        const pickRate = 0.01 + rng() * 0.1;
-        const mmrGain = 3 + rng() * 12;
+        const winRate = 0.4 + rng() * 0.2; // 0.40 ~ 0.60
+        const pickRate = 0.01 + rng() * 0.1; // 0.01 ~ 0.11
+        const mmrGain = 3 + rng() * 12; // 3 ~ 15
         const id = i + 1;
+
+        // ✅ 평균 생존시간(초): 8분(480s) ~ 16분(960s)
+        const survivalTime = Math.round(480 + rng() * 480);
+
         const primaryWeapon = WEAPONS[i % WEAPONS.length];
         const primary = { winRate, pickRate, mmrGain };
         VARIANT_STORE.set(id, makeVariants(primaryWeapon, primary, 2));
+
         arr.push({
             id,
             name: `Experimenter ${id}`,
@@ -54,6 +59,8 @@ export function makeMock(
             mmrGain,
             tier: TIERS[i % TIERS.length],
             imageUrl: `https://picsum.photos/seed/er-${id}/160/160`,
+            // ✅ 테이블에서 잡히도록 공식 필드로 추가
+            survivalTime,
         });
     }
     return arr;

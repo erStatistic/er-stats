@@ -1,18 +1,20 @@
-import NavBar from "@/components/NavBar";
-import ClusterCompsClient from "@/components/ClusterCompsClient";
+import NavBar from "@/features/ui/NavBar";
+import ClusterCompsClient from "@/features/cluster-comps/components/ClusterCompsClient";
 import { ClusterTriadSummary } from "@/types";
 
 // 🔧 임시 Mock: 나중에 API로 교체
-function mockClusterTriads(): ClusterTriadSummary[] {
-    return [
+function mockClusterTriads(
+    rng: () => number = Math.random,
+): ClusterTriadSummary[] {
+    const randSec = (min: number, max: number) =>
+        Math.round(min + rng() * (max - min));
+    const base = [
         {
             clusters: ["A", "B", "K"],
             winRate: 0.58,
             pickRate: 0.12,
             mmrGain: 9.4,
             count: 420,
-            patch: "v0.76",
-            tier: "All",
         },
         {
             clusters: ["A", "A", "K"],
@@ -20,8 +22,6 @@ function mockClusterTriads(): ClusterTriadSummary[] {
             pickRate: 0.1,
             mmrGain: 8.7,
             count: 360,
-            patch: "v0.76",
-            tier: "All",
         },
         {
             clusters: ["B", "K", "N"],
@@ -29,8 +29,6 @@ function mockClusterTriads(): ClusterTriadSummary[] {
             pickRate: 0.09,
             mmrGain: 7.9,
             count: 300,
-            patch: "v0.76",
-            tier: "All",
         },
         {
             clusters: ["C", "K", "A"],
@@ -38,8 +36,6 @@ function mockClusterTriads(): ClusterTriadSummary[] {
             pickRate: 0.07,
             mmrGain: 6.8,
             count: 210,
-            patch: "v0.76",
-            tier: "All",
         },
         {
             clusters: ["A", "N", "O"],
@@ -47,12 +43,16 @@ function mockClusterTriads(): ClusterTriadSummary[] {
             pickRate: 0.05,
             mmrGain: 5.4,
             count: 140,
-            patch: "v0.76",
-            tier: "All",
         },
-    ];
-}
+    ] as const;
 
+    return base.map((b, i) => ({
+        ...b,
+        survivalTime: randSec(720 - i * 30, 960 - i * 30), // 12–16분에서 약간씩 차등
+        patch: "v0.76",
+        tier: "All",
+    }));
+}
 export const metadata = { title: "ER Stats – 클러스터 조합 통계" };
 
 export default function ClusterCompsPage() {

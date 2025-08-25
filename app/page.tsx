@@ -1,4 +1,4 @@
-import HomeDashboard from "@/components/HomeDashboard";
+import HomeDashboard from "@/features/home/components/HomeDashboard";
 import {
     fetchLatestPatch,
     fetchTopCharacters,

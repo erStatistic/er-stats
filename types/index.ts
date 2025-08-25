@@ -1,9 +1,21 @@
+// types.ts — 중복 제거 + 직렬화 안전 + 평균 생존시간 필드 추가
+
+// 1) 캐릭터/무기 통계
 export type WeaponStat = {
     weapon: string;
     winRate: number; // 0..1
     pickRate: number; // 0..1
     mmrGain: number; // per game avg
 };
+
+export type SortKey =
+    | "tier"
+    | "name"
+    | "weapon"
+    | "winRate"
+    | "pickRate"
+    | "mmrGain"
+    | "survivalTime"; // ✅ 추가
 
 export interface CharacterSummary {
     id: number;
@@ -12,25 +24,22 @@ export interface CharacterSummary {
     winRate: number;
     pickRate: number;
     mmrGain: number;
-    tier: string; // 캐릭터 성능 티어 (S/A/B/C)
-    rankTier: string; // 게임 티어 (다이아+, 메테오라이트+ 등)
+    tier: string;
+    rankTier?: string;
     imageUrl?: string;
-}
-export type SortKey =
-    | "tier"
-    | "name"
-    | "weapon"
-    | "winRate"
-    | "pickRate"
-    | "mmrGain";
-export type SortDir = "asc" | "desc";
 
+    /** ✅ 게임당 평균 생존시간(초 또는 "mm:ss"/"hh:mm:ss") */
+    survivalTime?: number | string;
+}
+
+// 2) 빌드/팀 조합
 export type Build = {
     id: string;
     title: string;
     description: string;
     items: string[];
 };
+
 export type TeamComp = {
     id: string;
     title: string;
@@ -38,39 +47,36 @@ export type TeamComp = {
     note?: string;
 };
 
+// 3) 허니 배지 판정 결과
 export type HoneyResult = {
-    ids: Set<number>;
+    // ⚠️ Next.js 직렬화 이슈 방지를 위해 Set -> number[] 로 변경
+    ids: number[];
     mode: "triple" | "fallback" | "none";
     topK: number;
 };
+
+// 4) 조합 요약/클러스터
 export type CompSummary = {
     comp: number[]; // 캐릭터 id 배열 [1,2,3]
-    winRate: number;
-    pickRate: number;
-    mmrGain: number;
-    count: number;
-};
-export type ClusterLabel = string; // 'A' | 'B' ... 문자 라벨
-
-export type ClusterTriadSummary = {
-    clusters: [ClusterLabel, ClusterLabel, ClusterLabel]; // 예: ['탱커','브루저','원딜'] 대신 지금은 문자 라벨
     winRate: number; // 0..1
     pickRate: number; // 0..1
     mmrGain: number; // per game
-    count: number; // 표본 수
+    count: number;
+};
+
+export type ClusterLabel = string; // 'A' | 'B' | ... 'U'
+
+export type ClusterTriadSummary = {
+    clusters: [ClusterLabel, ClusterLabel, ClusterLabel];
+    winRate: number; // 0..1
+    pickRate: number; // 0..1
+    mmrGain: number; // per game
+    survivalTime?: number; // ✅ 평균 생존시간(초). 없으면 표시 시 "—"
+    count: number;
     patch?: string;
     tier?: string;
 };
 
-// (기존) 캐릭터 타입은 그대로 두되, 이번 페이지에선 사용 안 함
-export type CharacterSummary = {
-    id: number;
-    name: string;
-    imageUrl?: string;
-    rankTier?: string;
-};
-
-export type ClusterLabel = string; // 'A' | 'B' | ... 'U'
 export type Role =
     | "탱커"
     | "브루저"
@@ -92,6 +98,8 @@ export type ClusterMeta = {
     characters: CharacterBrief[];
     note?: string; // 선택: 설명/특징
 };
+
+// 5) 유저/추천
 export type UserProfile = {
     name: string;
     topChars: { id: number; name: string; imageUrl?: string }[]; // 최근 n게임 기준 Top3
@@ -110,7 +118,8 @@ export type CompSuggestion = {
     };
     note?: string;
 };
-// types.ts (필요분만 추가)
+
+// 6) 패치 노트
 export type PatchKind = "official" | "hotfix"; // 정식/핫픽스
 export type ChangeType = "buff" | "nerf" | "adjust" | "rework";
 

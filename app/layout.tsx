@@ -1,10 +1,10 @@
 // app/layout.tsx
 import "./globals.css";
 import type { ReactNode } from "react";
-import NavBar from "@/components/NavBar";
+import NavBar from "@/features/ui/NavBar";
 import Link from "next/link";
 import { ThemeProvider } from "next-themes";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle from "@/features/ui/ThemeToggle";
 
 export const metadata = {
     title: "ER Stats",

@@ -1,5 +1,5 @@
-import NavBar from "@/components/NavBar";
-import UserMultiSuggestClient from "@/components/UserMultiSuggestClient";
+import NavBar from "@/features/ui/NavBar";
+import UserMultiSuggestClient from "@/features/suggestion-multi/components/UserMultiSuggestClient";
 
 export const metadata = { title: "ER Stats – 멀티 유저 맞춤 조합 추천" };
 
