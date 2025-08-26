@@ -83,7 +83,7 @@ export default function RadarChart({
                             y={y}
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            className="text-[11px]"
+                            className="text-[11px] font-semibold"
                             style={{ fill: "var(--text-muted)" }}
                         >
                             {lb}

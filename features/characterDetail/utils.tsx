@@ -43,3 +43,12 @@ export function niceScale(min: number, max: number, ticks = 5) {
     const niceMax = Math.ceil(max / step) * step;
     return { min: niceMin, max: niceMax, step };
 }
+
+export function parseMmSsToSec(v: string) {
+    const m = v.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return undefined;
+    const min = Number(m[1]);
+    const sec = Number(m[2]);
+    if (!Number.isFinite(min) || !Number.isFinite(sec)) return undefined;
+    return min * 60 + sec;
+}

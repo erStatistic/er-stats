@@ -1,24 +1,35 @@
-// components/CharacterClient.tsx
+// features/character/components/CharacterClient.tsx
 "use client";
+
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CharacterSummary } from "@/types";
 import CharacterTable from "./CharacterTable";
-import CharacterCard from "./CharacterCard";
 import CharacterTabs from "./CharacterTabs";
 import { computeHoneySet } from "@/lib/stats";
 import { PATCHES, GAME_TIERS } from "@/features";
 import { getRankTier } from "@/features/character";
+import CharacterPicker from "./CharacterPicker";
 
 export default function CharacterClient({
     initialRows,
+    dbChars = [],
 }: {
     initialRows: CharacterSummary[];
+    dbChars?: Array<{
+        id: number;
+        nameKr?: string;
+        imageUrlMini?: string;
+        imageUrlFull?: string;
+    }>;
 }) {
     const [q, setQ] = useState("");
     const [patch, setPatch] = useState<Patch>("v0.76");
-    const [gameTier, setGameTier] = useState<GameTier>("All"); // ← 단일 선택 탭
+    const [gameTier, setGameTier] = useState<GameTier>("All");
     const [honeyOnly, setHoneyOnly] = useState(false);
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+
+    const router = useRouter();
+    const goDetail = (id: number) => router.push(`/characters/${id}`);
 
     // (추후 서버 패치 데이터로 교체 가능)
     const patchedRows = useMemo(() => initialRows, [initialRows, patch]);
@@ -44,31 +55,17 @@ export default function CharacterClient({
         [filtered, honeyOnly, honey],
     );
 
-    // 선택된 행 (현재 가시 목록 기준)
-    const selected = useMemo(
-        () =>
-            selectedId == null
-                ? null
-                : visibleRows.find((r) => r.id === selectedId) || null,
-        [visibleRows, selectedId],
-    );
-
-    const goDetail = (id: number) => {
-        window.location.href = `/characters/${id}`;
-    };
-
-    // 선택 전엔 목록이 전체, 선택 후엔 3+2 레이아웃
-    const leftSpan = selected ? "lg:col-span-3" : "lg:col-span-5";
-
     return (
-        <main className="mx-auto max-w-5xl grid grid-cols-1 gap-4 lg:grid-cols-5 pb-20">
-            {/* 왼쪽: 목록 */}
-            <section className={`card overflow-hidden ${leftSpan}`}>
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                    {/* 검색 */}
+        <main className="mx-auto max-w-5xl flex flex-col gap-4 pb-20">
+            {/* ① 캐릭터 선택 박스 (DB 데이터) */}
+            <CharacterPicker chars={dbChars} />
+            {/* ② 통계(테이블) 박스 */}
+            <section className="card overflow-hidden">
+                <div className="mb-3 px-4 pt-4 flex flex-wrap items-center gap-2">
+                    {/* 검색(표 전용) */}
                     <input
                         className="w-56 rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-app text-app"
-                        placeholder="실험체 검색"
+                        placeholder="실험체 검색 (표)"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                     />
@@ -77,10 +74,7 @@ export default function CharacterClient({
                     <select
                         className="rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none text-app"
                         value={patch}
-                        onChange={(e) => {
-                            setPatch(e.target.value as Patch);
-                            setSelectedId(null);
-                        }}
+                        onChange={(e) => setPatch(e.target.value as Patch)}
                         title="패치 선택"
                     >
                         {PATCHES.map((p) => (
@@ -93,20 +87,14 @@ export default function CharacterClient({
                     {/* 게임 티어 탭 (단일 선택) */}
                     <CharacterTabs
                         value={gameTier}
-                        onChange={(v) => {
-                            setGameTier(v);
-                            setSelectedId(null);
-                        }}
+                        onChange={(v) => setGameTier(v)}
                         items={GAME_TIERS}
                     />
 
                     {/* 허니 배지 필터 */}
                     <button
                         type="button"
-                        onClick={() => {
-                            setHoneyOnly((prev) => !prev);
-                            setSelectedId(null);
-                        }}
+                        onClick={() => setHoneyOnly((prev) => !prev)}
                         className={
                             "px-3 py-1.5 text-xs rounded-lg border transition " +
                             (honeyOnly
@@ -120,55 +108,13 @@ export default function CharacterClient({
                     </button>
                 </div>
 
+                {/* 표: 행 클릭 시 상세로 이동 */}
                 <CharacterTable
                     rows={visibleRows}
                     honeyIds={honey.ids}
-                    onSelect={(id) =>
-                        setSelectedId((prev) => (prev === id ? null : id))
-                    } // 같은 행 클릭 시 닫힘
+                    onSelect={(id) => goDetail(id)}
                 />
             </section>
-
-            {/* 오른쪽: 선택된 경우에만 표시 */}
-            {selected && (
-                <section className="card lg:col-span-2">
-                    <div className="mb-2 text-xs text-muted-app">
-                        패치{" "}
-                        <span className="font-medium text-app">{patch}</span> ·
-                        티어{" "}
-                        <span className="font-medium text-app">{gameTier}</span>{" "}
-                        · 기간{" "}
-                        <span className="font-medium text-app">최근 14일</span>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-app">
-                                캐릭터 정보
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    className="text-xs rounded-lg border border-app px-2 py-1 hover:bg-elev-10"
-                                    onClick={() => goDetail(selected.id)}
-                                >
-                                    자세히 보기
-                                </button>
-                                <button
-                                    className="text-xs rounded-lg border border-app px-2 py-1 hover:bg-elev-10"
-                                    onClick={() => setSelectedId(null)}
-                                >
-                                    닫기
-                                </button>
-                            </div>
-                        </div>
-                        <CharacterCard
-                            r={selected}
-                            honey={honey}
-                            onDetail={goDetail}
-                        />
-                    </div>
-                </section>
-            )}
         </main>
     );
 }

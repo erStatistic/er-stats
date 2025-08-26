@@ -1,100 +1,144 @@
-// app/characters/[id]/page.tsx (서버 컴포넌트)
+// app/characters/[id]/page.tsx
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import CharacterDetailClient from "@/features/characterDetail/components/CharacterDetailClient";
-import { makeMock, getVariants, mockBuildsFor, mockTeamsFor } from "@/lib/mock";
-import { mulberry32 } from "@/lib/rng";
 
 type Character = {
     id: number;
     nameKr: string;
-    imageUrl: string; // 빈 문자열일 수도 있으니 렌더링 전에 폴백 필요
+    imageUrlMini?: string;
+    imageUrlFull?: string;
 };
 
-// API 응답 타입 (참고용)
-type ApiResponse = {
-    code: number;
-    msg: string;
-    data?: {
-        ID: number;
-        NameKr: string;
-        ImageUrlMini: string | null;
-        ImageUrlFull: string | null;
-        CreatedAt: string;
-        UpdatedAt: string;
-    } | null;
+type CwItem = {
+    cwId: number;
+    character?: { id: number; name?: string; imageUrl?: string };
+    weapon?: { code: number; name: string; imageUrl?: string };
+    position?: { id?: number; name?: string | null };
 };
 
+type OverviewBox = {
+    summary?: {
+        winRate?: number;
+        pickRate?: number;
+        mmrGain?: number;
+        survivalSec?: number;
+    };
+    stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
+};
+type CwOverview = {
+    cwId: number;
+    character: { id: number; name: string; imageUrl: string };
+    weapon: { code: number; name: string; imageUrl: string };
+    position?: { id?: number | null; name?: string };
+    overview?: OverviewBox; // 서버가 overview 중첩으로 주는 형태
+};
+
+// ── fetch helpers ───────────────────────────────────────────────────────────
 async function getCharacter(id: number): Promise<Character | null> {
-    const base = process.env.API_BASE_URL; // 예: http://localhost:3333
-    if (!base) throw new Error("API_BASE_URL is not set");
-
+    const base = process.env.API_BASE_URL!;
     const res = await fetch(`${base}/api/v1/characters/${id}`, {
         cache: "no-store",
         headers: { accept: "application/json" },
     });
-
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Failed to fetch character: ${res.status}`);
-
-    const json = (await res.json()) as ApiResponse;
-
-    // 응답 코드 체크
-    if (json.code !== 200 || !json.data) return null;
-
-    // ✅ 정규화 (대문자 → 소문자, null/빈문자 처리)
-    const d = json.data;
-    console.log("[getCharacter] GET", `${base}/api/v1/characters/${id}`);
-    return {
-        id: d.ID,
-        nameKr: d.NameKr,
-        imageUrlMini: (d.ImageUrlMini ?? "").trim(), // 빈 문자열일 수 있음
-        imageUrlFull: (d.ImageUrlFull ?? "").trim(), // 빈 문자열일 수 있음
-    };
+    if (!res.ok) throw new Error(`character ${id} ${res.status}`);
+    const j = await res.json();
+    const d = j?.data;
+    return d
+        ? {
+              id: d.ID ?? d.id,
+              nameKr: d.NameKr ?? d.nameKr,
+              imageUrlMini: d.ImageUrlMini ?? d.imageUrlMini ?? undefined,
+              imageUrlFull: d.ImageUrlFull ?? d.imageUrlFull ?? undefined,
+          }
+        : null;
 }
-export default async function CharacterDetailPage({
+
+async function getCwsByCharacter(id: number): Promise<CwItem[]> {
+    const base = process.env.API_BASE_URL!;
+    const res = await fetch(`${base}/api/v1/characters/${id}/cws`, {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`cws for ch ${id} ${res.status}`);
+    const j = await res.json();
+    const arr = j?.data ?? j;
+    return Array.isArray(arr) ? arr : [];
+}
+
+async function getCwOverview(cwId: number): Promise<CwOverview | null> {
+    const base = process.env.API_BASE_URL!;
+    const res = await fetch(`${base}/api/v1/cws/${cwId}/overview`, {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`overview ${cwId} ${res.status}`);
+    const j = await res.json();
+    return j?.data ?? j;
+}
+
+export default async function Page({
     params,
+    searchParams,
 }: {
-    // Next 15 경고 회피 패턴 (현재 코드 유지)
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ wc?: string }>;
 }) {
     const { id } = await params;
-    const numId = Number(id);
-    if (!Number.isFinite(numId)) notFound();
+    const sp = await searchParams;
+    const chId = Number(id);
+    if (!Number.isFinite(chId)) notFound();
 
-    console.log("[CharacterDetailPage] GET", `/api/v1/characters/${numId}`);
-    // 1) 캐릭터 fetch
-    const character = await getCharacter(numId);
+    const character = await getCharacter(chId);
     if (!character) notFound();
 
-    // 2) 기존 mock 로직 유지 (원하면 제거 가능)
-    const rng = mulberry32(12345);
-    const rows = makeMock(36, rng);
-    const r = rows.find((x) => x.id === numId);
-    if (!r) return <div className="p-6">존재하지 않는 실험체</div>;
+    // 1) 이 캐릭터의 CW 목록 가져오기
+    const cws = await getCwsByCharacter(chId);
 
-    const variants = getVariants(numId, {
-        weapon: r.weapon,
-        winRate: r.winRate,
-        pickRate: r.pickRate,
-        mmrGain: r.mmrGain,
-    });
-    const currentWeapon = variants[0]?.weapon;
-    const builds = mockBuildsFor(numId, currentWeapon);
-    const teams = mockTeamsFor(numId, currentWeapon);
+    // variants: Pill에 쓸 가벼운 뷰 모델
+    const variants = cws.map((x) => ({
+        cwId: Number(x.cwId),
+        weapon: x.weapon?.name ?? "",
+        weaponImageUrl: x.weapon?.imageUrl ?? "",
+    }));
 
-    return (
-        <>
+    if (variants.length === 0) {
+        // CW가 없으면 빈 overview로 렌더
+        return (
             <CharacterDetailClient
                 initial={{
-                    r,
-                    variants,
-                    currentWeapon,
-                    builds,
-                    teams,
+                    r: { id: character.id, tier: "A" } as any, // 기존 타입 호환용 최소 필드
+                    variants: [],
+                    currentWeapon: "",
+                    builds: [],
+                    teams: [],
                     character,
+                    overview: undefined,
                 }}
             />
-        </>
+        );
+    }
+
+    // 2) 선택된 cwId 결정 (쿼리 wc, 없으면 첫번째)
+    const selectedCwId = sp?.wc ? Number(sp.wc) : variants[0].cwId;
+    const selected =
+        variants.find((v) => v.cwId === selectedCwId) ?? variants[0];
+
+    // 3) overview 호출
+    const overview = await getCwOverview(selected.cwId);
+
+    return (
+        <CharacterDetailClient
+            initial={{
+                r: { id: character.id, tier: "A" } as any, // (기존 컴포넌트가 tier를 쓰므로 최소값만)
+                variants,
+                currentWeapon: selected.weapon,
+                builds: [], // 아직 mock 유지면 []로 전달하고 클라에서 mock 채워도 OK
+                teams: [],
+                character,
+                overview,
+            }}
+        />
     );
 }

@@ -1,4 +1,7 @@
+// next.config.ts
 import type { NextConfig } from "next";
+
+const BACKEND = process.env.NEXT_PUBLIC_API;
 
 const nextConfig: NextConfig = {
     reactStrictMode: true,
@@ -12,6 +15,14 @@ const nextConfig: NextConfig = {
                 pathname: "/**",
             },
         ],
+    },
+    async rewrites() {
+        return [
+            {
+                source: "/api/v1/:path*",
+                destination: `${BACKEND}/api/v1/:path*`,
+            },
+        ];
     },
 };
 

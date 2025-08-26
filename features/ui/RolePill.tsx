@@ -17,7 +17,8 @@ export default function RolePill({
 
     return (
         <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${className}`}
+            className={`inline-flex h-6 items-center rounded-full border px-2
+        text-[11px] leading-none whitespace-nowrap shrink-0 ${className}`}
             style={{
                 color,
                 borderColor: stroke,

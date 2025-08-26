@@ -77,15 +77,6 @@ export type ClusterTriadSummary = {
     tier?: string;
 };
 
-export type Role =
-    | "탱커"
-    | "브루저"
-    | "암살자"
-    | "원딜"
-    | "서포터"
-    | "컨트롤"
-    | "기타";
-
 export type CharacterBrief = {
     id: number;
     name: string;

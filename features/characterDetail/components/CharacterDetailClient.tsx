@@ -1,10 +1,11 @@
+// features/characterDetail/components/CharacterDetailClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TierPill from "@/features/ui/TierPill";
 import VariantPill from "@/features/ui/VariantPill";
-import { Build, TeamComp, CharacterSummary, WeaponStat } from "@/types";
+import { Build, TeamComp, CharacterSummary } from "@/types";
 import { formatMMR, formatPercent, formatDuration } from "@/lib/stats";
 import { mockBuildsFor, mockTeamsFor } from "@/lib/mock";
 import ServerCharacter from "@/features/characterDetail/types";
@@ -14,16 +15,48 @@ import StatLine from "@/features/characterDetail/components/StatLine";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
 import { makeTrendSeriesPct } from "@/features/characterDetail/utils";
 
+// DB에서 오는 variant 뷰 모델
+type VariantItem = { cwId: number; weapon: string; weaponImageUrl?: string };
+
+// overview(중첩/평탄 둘 다 허용)
+type OverviewBox = {
+    summary?: {
+        winRate?: number;
+        pickRate?: number;
+        mmrGain?: number;
+        survivalSec?: number;
+    };
+    stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
+};
+type CwOverview =
+    | (OverviewBox & {
+          cwId: number;
+          character: { id: number; name: string; imageUrl: string };
+          weapon: { code: number; name: string; imageUrl: string };
+          position?: { id?: number | null; name?: string };
+      })
+    | {
+          cwId: number;
+          character: { id: number; name: string; imageUrl: string };
+          weapon: { code: number; name: string; imageUrl: string };
+          position?: { id?: number | null; name?: string };
+          overview: OverviewBox;
+      };
+
 export default function CharacterDetailClient({
     initial,
 }: {
     initial: {
-        r: CharacterSummary;
-        variants: WeaponStat[];
+        r: CharacterSummary; // tier만 사용
+        variants: VariantItem[]; // ✅ DB 리스트
         currentWeapon?: string;
         builds: Build[];
         teams: TeamComp[];
-        character?: ServerCharacter;
+        character?: ServerCharacter & {
+            imageUrlMini?: string;
+            imageUrlFull?: string;
+        };
+        overview?: CwOverview;
     };
 }) {
     const router = useRouter();
@@ -34,19 +67,16 @@ export default function CharacterDetailClient({
         builds: initBuilds,
         teams: initTeams,
         character,
+        overview,
     } = initial;
 
     const displayName = character?.nameKr ?? (r as any).name ?? "이름 없음";
     const displayId = character?.id ?? r.id;
-    const imageUrl =
-        character?.imageUrlFull ??
-        (r as any).imageUrlFull ??
-        `/chars/${displayId % 9 || 1}.png`;
     const portraitSrc =
         character?.imageUrlMini ??
         (r as any).imageUrlMini ??
-        imageUrl ??
-        "/fallback.png";
+        character?.imageUrlFull ??
+        `/chars/${displayId % 9 || 1}.png`;
 
     const [selectedWeapon, setSelectedWeapon] = useState(
         currentWeapon ?? variants[0]?.weapon ?? "",
@@ -54,99 +84,68 @@ export default function CharacterDetailClient({
     const [builds, setBuilds] = useState(initBuilds);
     const [teams, setTeams] = useState(initTeams);
 
-    function onSelectWeapon(w: string) {
-        setSelectedWeapon(w);
-        setBuilds(mockBuildsFor(displayId, w));
-        setTeams(mockTeamsFor(displayId, w));
-    }
+    // overview 중첩/평탄 통합
+    const ov: OverviewBox | undefined = useMemo(() => {
+        if (!overview) return undefined;
+        const any = overview as any;
+        return any.overview
+            ? any.overview
+            : { summary: any.summary, stats: any.stats };
+    }, [overview]);
 
-    const current = useMemo(
-        () => variants.find((v) => v.weapon === selectedWeapon) ?? variants[0],
-        [variants, selectedWeapon],
-    );
+    // 지표는 overview 우선
+    const winRate = ov?.summary?.winRate ?? 0;
+    const pickRate = ov?.summary?.pickRate ?? 0;
+    const mmrGain = ov?.summary?.mmrGain ?? 0;
+    const survivalSec = ov?.summary?.survivalSec;
 
-    // 평균 생존시간(초) 계산
-    const survivalSec = useMemo(() => {
-        const st: any = (r as any).survivalTime;
-        if (typeof st === "number") return Math.round(st);
-        if (typeof st === "string") {
-            const parts = st.split(":").map(Number);
-            if (!parts.some(Number.isNaN)) {
-                if (parts.length === 3)
-                    return parts[0] * 3600 + parts[1] * 60 + parts[2];
-                if (parts.length === 2) return parts[0] * 60 + parts[1];
-            }
-        }
-        if (typeof (r as any).avgSurvivalSec === "number")
-            return Math.round((r as any).avgSurvivalSec);
-        if (typeof (r as any).avgSurvivalMs === "number")
-            return Math.round((r as any).avgSurvivalMs / 1000);
-        return undefined;
-    }, [r]);
-
-    // ───────────── 레이더(오각형) 데이터 계산 ─────────────
-    // 정규화 유틸
-    const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
-    const tierScore = (tier: string) => {
-        const t = (tier || "").toUpperCase();
-        if (t.startsWith("S")) return 1.0;
-        if (t.startsWith("A")) return 0.8;
-        if (t.startsWith("B")) return 0.6;
-        if (t.startsWith("C")) return 0.4;
-        if (t.startsWith("D")) return 0.25;
-        return 0.1; // F or 기타
-    };
-    // mmrGain은 프로젝트에 맞게 범위를 조정하세요(여기선 -20~+40을 0~1로)
-    const normMMR = (mmr: number) => clamp((mmr + 20) / 60);
-    // 생존시간은 0~20분(1200s)을 0~1로
-    const normSurvival = (sec: number) => clamp(sec / 1200);
-
+    // 레이더(1~5 → 0~1)
     const radar = useMemo(() => {
-        const w = current?.winRate ?? 0; // 0~1
-        const p = current?.pickRate ?? 0; // 0~1
-        const m = normMMR(current?.mmrGain ?? 0);
-        const s = survivalSec != null ? normSurvival(survivalSec) : 0;
-        const t = tierScore(r.tier);
+        const s = ov?.stats;
+        if (!s)
+            return {
+                labels: ["ATK", "DEF", "SPD", "CC", "SUP"],
+                values: [0.5, 0.5, 0.5, 0.5, 0.5],
+            };
+        const to01 = (v: number) => Math.max(0, Math.min(1, v / 5));
         return {
             labels: ["ATK", "DEF", "SPD", "CC", "SUP"],
-            values: [w, p, m, s, t], // 0~1
-            raw: {
-                win: w,
-                pick: p,
-                mmr: current?.mmrGain ?? 0,
-                survival: survivalSec ?? 0,
-                tier: r.tier,
-            },
+            values: [
+                to01(s.atk),
+                to01(s.def),
+                to01(s.spd),
+                to01(s.cc),
+                to01(s.sup),
+            ],
         };
-    }, [current, survivalSec, r.tier]);
+    }, [ov?.stats]);
 
-    // 14일 시계열 (메모이제이션)
+    // 추세(데모)
     const winData = useMemo(
-        () =>
-            makeTrendSeriesPct(
-                current?.winRate ?? 0.5,
-                `${selectedWeapon}-win`,
-            ),
-        [current?.winRate, selectedWeapon],
+        () => makeTrendSeriesPct(winRate ?? 0.5, `${selectedWeapon}-win`),
+        [winRate, selectedWeapon],
     );
     const pickData = useMemo(
-        () =>
-            makeTrendSeriesPct(
-                current?.pickRate ?? 0.035,
-                `${selectedWeapon}-pick`,
-            ),
-        [current?.pickRate, selectedWeapon],
+        () => makeTrendSeriesPct(pickRate ?? 0.035, `${selectedWeapon}-pick`),
+        [pickRate, selectedWeapon],
     );
-
-    // 탭 상태
     const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
+
+    // ✅ 무기 pill 클릭: 같은 페이지로 쿼리 wc=cwId 교체 → 서버가 새 overview 로드
+    function goWeapon(v: VariantItem) {
+        setSelectedWeapon(v.weapon); // 즉시 UI 반영
+        setBuilds(mockBuildsFor(displayId, v.weapon)); // 필요 시 유지
+        setTeams(mockTeamsFor(displayId, v.weapon));
+        router.replace(`/characters/${displayId}?wc=${v.cwId}`);
+    }
+
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                     <TierFramedImage
-                        src={portraitSrc}
+                        src={portraitSrc || "/fallback.png"}
                         alt={displayName}
                         tier={r.tier}
                         size={72}
@@ -165,10 +164,11 @@ export default function CharacterDetailClient({
                             <div className="ml-2 flex items-center gap-1 overflow-x-auto">
                                 {variants.map((v) => (
                                     <VariantPill
-                                        key={v.weapon}
-                                        v={v}
+                                        key={v.cwId}
+                                        // VariantPill이 v.weapon만 써도 되도록 맞춰서 전달
+                                        v={{ weapon: v.weapon } as any}
                                         selected={v.weapon === selectedWeapon}
-                                        onClick={() => onSelectWeapon(v.weapon)}
+                                        onClick={() => goWeapon(v)}
                                     />
                                 ))}
                             </div>
@@ -182,67 +182,57 @@ export default function CharacterDetailClient({
                         if (
                             typeof window !== "undefined" &&
                             window.history.length > 1
-                        ) {
+                        )
                             router.back();
-                        } else {
-                            router.push("/characters");
-                        }
+                        else router.push("/characters");
                     }}
                     className="rounded-lg border border-app bg-muted px-3 py-2 text-xs hover:bg-elev-10 whitespace-nowrap"
                 >
                     ← 목록으로
                 </button>
             </div>
+
             {/* 상단 카드들 */}
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
-                {/* ① 지표 (컴팩트 pill 세로열) */}
+                {/* ① 지표 */}
                 <div className="card p-4 flex flex-col h-full">
-                    <h3 className="mb-2 text-sm text-muted-app">지표</h3>
-
-                    {/* 본문: 남은 높이에서 수직 가운데 정렬 */}
+                    <h3 className="mb-2 font-semibold">지표</h3>
                     <div className="flex-1 flex items-center">
                         <div className="w-full grid gap-2 min-h-[160px]">
-                            {current ? (
-                                <>
-                                    <StatLine
-                                        label="승률"
-                                        value={formatPercent(current.winRate)}
-                                        size="sm"
-                                    />
-                                    <StatLine
-                                        label="픽률"
-                                        value={formatPercent(current.pickRate)}
-                                        size="sm"
-                                    />
-                                    <StatLine
-                                        label="획득MMR"
-                                        value={formatMMR(current.mmrGain, 1)}
-                                        size="sm"
-                                    />
-                                    <StatLine
-                                        label="평균 생존시간"
-                                        value={
-                                            survivalSec != null
-                                                ? formatDuration(survivalSec)
-                                                : "—"
-                                        }
-                                        size="sm"
-                                    />
-                                </>
-                            ) : (
-                                <span className="text-app font-medium">—</span>
-                            )}
+                            <StatLine
+                                label="승률"
+                                value={formatPercent(winRate ?? 0)}
+                                size="sm"
+                            />
+                            <StatLine
+                                label="픽률"
+                                value={formatPercent(pickRate ?? 0)}
+                                size="sm"
+                            />
+                            <StatLine
+                                label="획득MMR"
+                                value={formatMMR(mmrGain ?? 0, 1)}
+                                size="sm"
+                            />
+                            <StatLine
+                                label="평균 생존시간"
+                                value={
+                                    survivalSec != null
+                                        ? formatDuration(
+                                              Math.round(survivalSec),
+                                          )
+                                        : "—"
+                                }
+                                size="sm"
+                            />
                         </div>
                     </div>
                 </div>
 
-                {/* ② 스탯 요약 (레이더) */}
+                {/* ② 레이더 */}
                 <div className="card p-4 h-full">
                     <div className="mb-2 flex items-center justify-between">
                         <h3 className="font-semibold">스탯 요약</h3>
-                        <div className="text-xs text-muted-app">
-                            {radar.labels.join(" · ")}
-                        </div>
                     </div>
                     <RadarChart
                         values={radar.values}
@@ -253,12 +243,10 @@ export default function CharacterDetailClient({
                     />
                 </div>
 
-                {/* ③ 최근 추세(14일): 탭으로 승률/픽률 전환 */}
+                {/* ③ 최근 추세 */}
                 <div className="card p-4 flex flex-col h-full">
                     <div className="mb-3 flex items-center justify-between">
                         <h3 className="font-semibold">최근 추세 (14일)</h3>
-
-                        {/* 탭 */}
                         <div
                             role="tablist"
                             aria-label="최근 추세 탭"
@@ -284,17 +272,15 @@ export default function CharacterDetailClient({
                             </button>
                         </div>
                     </div>
-
-                    {/* 본문: 가운데 정렬된 단일 차트 */}
                     <div className="flex-1 flex items-center">
                         <MiniLineChart
                             title={
                                 trendTab === "win" ? "Win Rate" : "Pick Rate"
                             }
                             data={trendTab === "win" ? winData : pickData}
-                            color={trendTab === "win" ? "#ef4444" : "#f59e0b"} // 원하면 var(--brand)로
+                            color={trendTab === "win" ? "#ef4444" : "#f59e0b"}
                             yTickCount={5}
-                            suffix="%" // MiniLineChart의 Y라벨에 % 붙이려면 컴포넌트 쪽에서도 사용하도록 반영해둔 버전이어야 해요
+                            suffix="%"
                             decimals={1}
                             width={340}
                             height={170}
