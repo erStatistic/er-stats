@@ -384,8 +384,8 @@ export default function UserMultiSuggestClient() {
                     </div>
 
                     {/* Catalog (DB 캐릭터 목록) */}
-                    <details className="card" open>
-                        <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
+                    <details className="card p-0 overflow-hidden" open>
+                        <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
                             Character catalog{" "}
                             <span
                                 className="text-xs"
@@ -395,7 +395,8 @@ export default function UserMultiSuggestClient() {
                             </span>
                         </summary>
 
-                        <div className="mt-3">
+                        {/* 검색 바: 스크롤 상단에 고정 */}
+                        <div className="px-4 py-3 border-t border-app sticky top-0 bg-surface z-10">
                             <input
                                 className="w-72 rounded-xl border px-3 py-2 text-sm outline-none"
                                 style={{
@@ -409,32 +410,28 @@ export default function UserMultiSuggestClient() {
                             />
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                            {filteredChars.map((c) => (
-                                <button
-                                    key={c.id}
-                                    onClick={() => openPickerFor(c)}
-                                    className="card flex flex-col items-center gap-2 transition hover:opacity-90"
-                                >
-                                    <img
-                                        src={c.imageUrl}
-                                        alt={c.name}
-                                        className="w-16 h-16 rounded-full object-cover"
-                                    />
-                                    <div className="text-xs font-medium">
-                                        {c.name}
-                                    </div>
-                                    <div
-                                        className="text-[10px]"
-                                        style={{ color: "var(--text-muted)" }}
+                        {/* 👇 여기 래퍼에 고정 높이 + 스크롤 */}
+                        <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                                {filteredChars.map((c) => (
+                                    <button
+                                        key={c.id}
+                                        onClick={() => openPickerFor(c)}
+                                        className="card flex flex-col items-center gap-2 transition hover:opacity-90"
                                     >
-                                        무기 선택을 눌러주세요
-                                    </div>
-                                </button>
-                            ))}
+                                        <img
+                                            src={c.imageUrl}
+                                            alt={c.name}
+                                            className="w-16 h-16 rounded-full object-cover"
+                                        />
+                                        <div className="text-xs font-medium">
+                                            {c.name}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </details>
-
                     {/* Results */}
                     {selectedChars.length === 0 ? (
                         <div
@@ -487,6 +484,7 @@ export default function UserMultiSuggestClient() {
 
             {/* 무기 선택 모달 (DB 연동) */}
             <CharacterWeaponPicker
+                key={pickerTarget?.id ?? "none"} // ← 추가!
                 open={pickerOpen}
                 character={pickerTarget}
                 onClose={() => setPickerOpen(false)}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-/** 상위에서 사용하는 캐릭터 타입 (카탈로그용) */
+/** 상위 카탈로그용 캐릭터 타입 */
 export type CharItem = {
     id: number;
     name: string;
@@ -20,10 +20,11 @@ type WeaponRow = {
 /* ---- API 유틸 ---- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
 
-async function fetchJSON<T>(path: string): Promise<T> {
+async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
         cache: "no-store",
         headers: { accept: "application/json" },
+        signal,
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const j = await res.json();
@@ -48,24 +49,46 @@ export default function CharacterWeaponPicker({
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
+    // 직전 캐릭터 id (렌더 시점에 변경 감지용)
+    const prevIdRef = useRef<number | null>(null);
+    const charId = character?.id ?? null;
+    const charChangedThisRender =
+        open && charId !== null && prevIdRef.current !== charId;
+
     // Esc로 닫기
     useEffect(() => {
         if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
+        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
 
-    // 열릴 때 해당 캐릭터의 무기군 로드 (/api/v1/characters/:id/cws)
+    // 닫히면 상태 정리
+    useEffect(() => {
+        if (!open) {
+            setWeapons([]);
+            setErr(null);
+            setLoading(false);
+            prevIdRef.current = null;
+        }
+    }, [open]);
+
+    // 열릴 때 & 캐릭터가 바뀔 때: 이전 목록 즉시 비우고 새로 로드
     useEffect(() => {
         if (!open || !character) return;
 
+        // 렌더 직후부터 “이 캐릭터에 대한 화면”으로 간주
+        prevIdRef.current = character.id;
+
+        // 즉시 초기화(잔상 방지)
+        setWeapons([]);
+        setErr(null);
+        setLoading(true);
+
+        const ctrl = new AbortController();
         let alive = true;
+
         (async () => {
-            setErr(null);
-            setLoading(true);
             try {
                 type CwTab = {
                     cwId: number;
@@ -74,7 +97,10 @@ export default function CharacterWeaponPicker({
 
                 const rows = await fetchJSON<CwTab[]>(
                     `/api/v1/characters/${character.id}/cws`,
+                    ctrl.signal,
                 );
+
+                if (!alive) return;
 
                 const mapped: WeaponRow[] = (rows ?? [])
                     .map((r) => ({
@@ -83,12 +109,10 @@ export default function CharacterWeaponPicker({
                         imageUrl: r.weapon?.imageUrl ?? "",
                         cwId: r.cwId,
                     }))
-                    // 중복 제거(code 기준)
                     .filter(
                         (x, i, arr) =>
                             arr.findIndex((y) => y.code === x.code) === i,
                     )
-                    // 보기 좋게 정렬
                     .sort((a, b) => {
                         const ac = a.code ?? 9_999;
                         const bc = b.code ?? 9_999;
@@ -96,31 +120,34 @@ export default function CharacterWeaponPicker({
                         return (a.name || "").localeCompare(b.name || "");
                     });
 
-                if (!alive) return;
                 setWeapons(mapped);
                 // 첫 버튼 포커스
                 setTimeout(() => firstBtnRef.current?.focus(), 0);
             } catch (e: any) {
                 if (!alive) return;
-                setErr(e?.message || "무기 목록을 불러오지 못했습니다.");
-                setWeapons([]);
+                if (e?.name !== "AbortError") {
+                    setErr(e?.message || "무기 목록을 불러오지 못했습니다.");
+                    setWeapons([]);
+                }
             } finally {
-                if (alive) setLoading(false);
+                alive && setLoading(false);
             }
         })();
 
         return () => {
             alive = false;
+            ctrl.abort();
         };
-    }, [open, character]);
+    }, [open, character?.id]);
 
     if (!open || !character) return null;
+
+    const showLoading = loading || charChangedThisRender;
 
     return (
         <div
             className="fixed inset-0 z-40 flex items-center justify-center bg-elev-30"
             onClick={(e) => {
-                // 바깥(오버레이) 클릭 시 닫기
                 if (e.target === e.currentTarget) onClose();
             }}
             role="dialog"
@@ -155,14 +182,15 @@ export default function CharacterWeaponPicker({
 
                 {/* 본문 */}
                 <div className="p-4">
-                    {loading && (
+                    {showLoading && (
                         <div className="text-sm text-muted-app">
                             불러오는 중…
                         </div>
                     )}
-                    {err && <div className="text-sm text-red-400">{err}</div>}
-
-                    {!loading && !err && (
+                    {!showLoading && err && (
+                        <div className="text-sm text-red-400">{err}</div>
+                    )}
+                    {!showLoading && !err && (
                         <div className="grid grid-cols-2 gap-2">
                             {weapons.map((w, idx) => (
                                 <button
@@ -170,7 +198,7 @@ export default function CharacterWeaponPicker({
                                     ref={idx === 0 ? firstBtnRef : undefined}
                                     className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm hover:bg-elev-10 transition focus:outline-none focus:ring-2 focus:ring-[var(--brand)] flex items-center gap-2"
                                     onClick={() => {
-                                        onPick(character.id, w.name); // 필요 시 cwId/weaponCode도 함께 전달하도록 확장 가능
+                                        onPick(character.id, w.name);
                                         onClose();
                                     }}
                                 >

@@ -99,15 +99,14 @@ function AvatarWithWeapon({
                 className="w-full h-full object-cover rounded-full"
                 onError={onError}
             />
-
             {weaponSrc && (
                 <div
                     className="absolute right-0 bottom-0 rounded-full border-2 shadow"
                     style={{
                         width: dot,
                         height: dot,
-                        backgroundColor: "#000", // 검은 배경
-                        borderColor: "var(--surface)", // 카드 배경과 경계
+                        backgroundColor: "#000",
+                        borderColor: "var(--surface)",
                         display: "grid",
                         placeItems: "center",
                     }}
@@ -132,14 +131,50 @@ function AvatarWithWeapon({
 /* ---------- 메인 카드 ---------- */
 export default function ClusterCard({ data }: { data: PropsData }) {
     const [open, setOpen] = useState(false);
+
+    // 전체 목록(펼쳤을 때)
     const [detail, setDetail] = useState<ClusterMetaCW | null>(
         isCW(data) ? (data as ClusterMetaCW) : null,
     );
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
+    // 프리뷰(접혀있을 때 최대 4개)
+    const [previewEntries, setPreviewEntries] = useState<
+        ClusterEntryCW[] | null
+    >(
+        isCW(data)
+            ? (data as ClusterMetaCW).entries.slice(0, 4)
+            : isCharList(data)
+              ? (data as ClusterMetaChar).characters.slice(0, 4).map((c) => ({
+                    cwId: 0,
+                    character: {
+                        id: c.id,
+                        name: c.name,
+                        imageUrl: c.imageUrl,
+                    } as any,
+                    weapon: {} as any,
+                }))
+              : null,
+    );
+    const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+    const [previewErr, setPreviewErr] = useState<string | null>(null);
+    const [previewLoadedOnce, setPreviewLoadedOnce] = useState<boolean>(false);
+
+    // ✅ 총 개수 (버튼 노출 판단에 사용)
+    const [totalCount, setTotalCount] = useState<number | null>(
+        isCW(data)
+            ? (data as ClusterMetaCW).entries.length
+            : isCharList(data)
+              ? (data as ClusterMetaChar).characters.length
+              : ((data as HeaderOnly).counts?.cws ?? null),
+    );
+
     const listId = useId();
     const router = useRouter();
+
+    const label = (data as any).label;
+    const role = (data as any).role;
 
     // 펼칠 때 상세 로드
     useEffect(() => {
@@ -148,9 +183,11 @@ export default function ClusterCard({ data }: { data: PropsData }) {
             try {
                 setLoading(true);
                 setErr(null);
-                const res = await clientGetCwByCluster(data.clusterId);
+                const res = await clientGetCwByCluster(
+                    (data as HeaderOnly).clusterId,
+                );
                 setDetail({
-                    clusterId: data.clusterId,
+                    clusterId: (data as HeaderOnly).clusterId,
                     label: res.label,
                     role: (data as HeaderOnly).role,
                     entries: res.entries,
@@ -161,6 +198,7 @@ export default function ClusterCard({ data }: { data: PropsData }) {
                         ).size,
                     },
                 });
+                setTotalCount(res.entries.length); // ✅ 전체 개수 확정
             } catch (e: any) {
                 setErr(e?.message ?? "로드 실패");
             } finally {
@@ -170,12 +208,37 @@ export default function ClusterCard({ data }: { data: PropsData }) {
         load();
     }, [open, data, detail]);
 
-    const label = (data as any).label;
-    const role = (data as any).role;
+    // 접혀있을 때 프리뷰(최대 4개) 준비 — HeaderOnly면 가볍게 불러서 총 개수도 파악
+    useEffect(() => {
+        if (open) return;
+        if (!isHeader(data)) return;
+        if (previewLoadedOnce || previewEntries) return;
 
-    // ✅ 파생값은 매 렌더에서 계산
-    const cwCount =
-        detail?.counts?.cws ?? (data as any)?.counts?.cws ?? undefined;
+        let alive = true;
+        (async () => {
+            try {
+                setPreviewLoading(true);
+                setPreviewErr(null);
+                const res = await clientGetCwByCluster(
+                    (data as HeaderOnly).clusterId,
+                );
+                if (!alive) return;
+                setPreviewEntries(res.entries.slice(0, 4));
+                setTotalCount(res.entries.length); // ✅ 총 개수 업데이트
+                setPreviewLoadedOnce(true);
+            } catch (e: any) {
+                if (!alive) return;
+                setPreviewErr(e?.message ?? "미리보기 로드 실패");
+            } finally {
+                alive && setPreviewLoading(false);
+            }
+        })();
+
+        return () => {
+            alive = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, data, previewLoadedOnce, previewEntries]);
 
     const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
         (e.currentTarget as HTMLImageElement).src =
@@ -184,6 +247,46 @@ export default function ClusterCard({ data }: { data: PropsData }) {
                 `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="100%" height="100%" fill="#cbd5e1"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="8" fill="#475569">No Img</text></svg>`,
             );
     };
+
+    // 공통 렌더러: 항목 버튼
+    const renderItem = (e: ClusterEntryCW) => {
+        const char = charImg(e.character);
+        const weap = weapImg(e.weapon);
+        const title = [nameOf(e.character), nameOf(e.weapon)]
+            .filter(Boolean)
+            .join(" · ");
+
+        const isOnlyChar = !e.cwId || !e.weapon?.name;
+        const go = () =>
+            isOnlyChar
+                ? router.push(`/characters/${e.character.id}`)
+                : router.push(`/characters/${e.character.id}?wc=${e.cwId}`);
+
+        return (
+            <li
+                key={`${e.cwId}-${e.character.id}-${e.weapon?.code ?? e.weapon?.id ?? ""}`}
+            >
+                <button
+                    type="button"
+                    onClick={go}
+                    title={title}
+                    aria-label={title || `${nameOf(e.character)} 상세`}
+                    className="transition hover:scale-[1.03]"
+                >
+                    <AvatarWithWeapon
+                        charSrc={char}
+                        weaponSrc={weap}
+                        size={56}
+                        dot={18}
+                        onError={onImgError}
+                    />
+                </button>
+            </li>
+        );
+    };
+
+    // ✅ 버튼 노출 조건: 접힘 상태 & totalCount가 5개 이상일 때만
+    const showMoreButton = !open && totalCount != null && totalCount > 4;
 
     return (
         <article className="card overflow-hidden p-0">
@@ -200,27 +303,51 @@ export default function ClusterCard({ data }: { data: PropsData }) {
                     <RolePill role={role} />
                 </div>
                 <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {cwCount != null ? `${cwCount}개` : "…"}
+                    {totalCount != null ? `${totalCount}개` : "…"}
                 </div>
             </header>
 
-            {/* 접혀있을 때: 우측 정렬 버튼 */}
+            {/* 접혀있을 때: 프리뷰(최대 4개) + (조건부) 우측 버튼 */}
             {!open && (
-                <div className="px-4 pb-3 mt-3 flex justify-end">
-                    <button
-                        type="button"
-                        onClick={() => setOpen(true)}
-                        className="rounded-lg border px-3 py-2 text-xs transition hover:opacity-90"
-                        style={{
-                            borderColor: "var(--border)",
-                            background: "var(--surface)",
-                            color: "var(--text)",
-                        }}
-                        aria-expanded={open}
-                        aria-controls={listId}
-                    >
-                        목록 보기
-                    </button>
+                <div className="px-4 pb-3 mt-3">
+                    <div className="mb-2">
+                        {previewLoading ? (
+                            <div className="text-xs text-muted-app px-2 py-1">
+                                미리보기 불러오는 중…
+                            </div>
+                        ) : previewErr ? (
+                            <div className="text-xs text-red-400 px-2 py-1">
+                                에러: {previewErr}
+                            </div>
+                        ) : previewEntries && previewEntries.length > 0 ? (
+                            <ul className="grid grid-cols-4 gap-3 place-items-center">
+                                {previewEntries.slice(0, 4).map(renderItem)}
+                            </ul>
+                        ) : (
+                            <div className="text-xs text-muted-app px-2 py-1">
+                                표시할 항목이 없습니다.
+                            </div>
+                        )}
+                    </div>
+
+                    {showMoreButton && (
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setOpen(true)}
+                                className="rounded-lg border px-3 py-2 text-xs transition hover:opacity-90"
+                                style={{
+                                    borderColor: "var(--border)",
+                                    background: "var(--surface)",
+                                    color: "var(--text)",
+                                }}
+                                aria-expanded={open}
+                                aria-controls={listId}
+                            >
+                                목록 보기
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -240,69 +367,24 @@ export default function ClusterCard({ data }: { data: PropsData }) {
 
                     {detail && (
                         <ul className="grid grid-cols-4 gap-3 place-items-center">
-                            {detail.entries.map((e) => {
-                                const char = charImg(e.character);
-                                const weap = weapImg(e.weapon);
-                                const title = `${nameOf(e.character)} · ${nameOf(e.weapon)}`;
-                                // ⬇️ 서버가 주는 무기 식별자(code or id) 아무거나 우선 사용
-                                const weaponCode = e.weapon.code ?? e.weapon.id;
-
-                                return (
-                                    <li key={e.cwId}>
-                                        <button
-                                            type="button"
-                                            // ⬇️ 무기코드를 쿼리로 넘긴다 (?wc=)
-                                            onClick={() =>
-                                                router.push(
-                                                    `/characters/${e.character.id}?wc=${e.cwId}`,
-                                                )
-                                            }
-                                            title={title}
-                                            aria-label={title}
-                                            className="transition hover:scale-[1.03]"
-                                        >
-                                            <AvatarWithWeapon
-                                                charSrc={char}
-                                                weaponSrc={weap}
-                                                size={56}
-                                                dot={18}
-                                                onError={onImgError}
-                                            />
-                                        </button>
-                                    </li>
-                                );
-                            })}
+                            {detail.entries.map(renderItem)}
                         </ul>
                     )}
 
-                    {/* (옵션) 옛 구조 대응 */}
                     {!detail &&
                         isCharList(data) &&
                         Array.isArray((data as any).characters) && (
                             <ul className="grid grid-cols-4 gap-3 place-items-center">
-                                {(data as ClusterMetaChar).characters.map(
-                                    (c) => (
-                                        <li key={c.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/characters/${c.id}`,
-                                                    )
-                                                }
-                                                title={c.name}
-                                                aria-label={`${c.name} 상세`}
-                                                className="transition hover:scale-[1.03]"
-                                            >
-                                                <AvatarWithWeapon
-                                                    charSrc={c.imageUrl || ""}
-                                                    size={56}
-                                                    dot={18}
-                                                    onError={onImgError}
-                                                />
-                                            </button>
-                                        </li>
-                                    ),
+                                {(data as ClusterMetaChar).characters.map((c) =>
+                                    renderItem({
+                                        cwId: 0,
+                                        character: {
+                                            id: c.id,
+                                            name: c.name,
+                                            imageUrl: c.imageUrl,
+                                        } as any,
+                                        weapon: {} as any,
+                                    }),
                                 )}
                             </ul>
                         )}
