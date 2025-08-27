@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import CharacterDetailClient from "@/features/characterDetail/components/CharacterDetailClient";
 import { mockBuildsFor, mockTeamsFor } from "@/lib/mock";
 
-// 캐시 끄고, 쿼리 변경마다 강제 동적 렌더
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -63,50 +62,85 @@ async function getCharacterCws(characterId: number): Promise<VariantItem[]> {
     }));
 }
 
+/** 서버 응답 -> 클라가 쓰기 편한 형태로 변환 */
 async function getCwOverview(cwId: number) {
     const base = process.env.API_BASE_URL!;
     const j = await fetchJSON<any>(`${base}/api/v1/cws/${cwId}/overview`);
-    // 그대로 넘기면 Client에서 {overview: {summary, stats}} 구조를 파싱함
-    return j?.data ?? null;
+    const d = j?.data;
+    if (!d) return null;
+
+    // cluster 단수 → clusters 복수배열로 표준화
+    const clusters: string[] = d.cluster?.name ? [String(d.cluster.name)] : [];
+
+    return {
+        cwId: d.cwId,
+        character: {
+            id: d.character?.id,
+            name: d.character?.name,
+            imageUrl: d.character?.imageUrl ?? "",
+        },
+        weapon: {
+            code: d.weapon?.code,
+            name: d.weapon?.name,
+            imageUrl: d.weapon?.imageUrl ?? "",
+        },
+        position: d.position
+            ? { id: d.position.id, name: d.position.name }
+            : undefined,
+
+        // ✅ 클러스터를 최상위에 두고,
+        clusters,
+
+        // ✅ 요약/스탯은 기존 구조 유지(클라가 overview.overview.summary 로 읽음)
+        overview: {
+            summary: d.overview?.summary ?? null,
+            stats: d.overview?.stats ?? null,
+            // (선택) 이 안에도 넣어두면 클라 후보 탐색 로직과 100% 호환
+            // clusters,
+        },
+    };
 }
+
+// ✅ Next 최신: params/searchParams 는 Promise
+type Params = { id: string };
+type Query = { wc?: string | string[] };
 
 export default async function Page({
     params,
     searchParams,
 }: {
-    params: { id: string };
-    searchParams: { wc?: string };
+    params: Promise<Params>;
+    searchParams: Promise<Query>;
 }) {
     const base = process.env.API_BASE_URL;
     if (!base) throw new Error("API_BASE_URL is not set");
 
-    const charId = Number(params.id);
+    const { id } = await params;
+    const qs = await searchParams;
+
+    const wcRaw = qs.wc;
+    const wc =
+        wcRaw != null
+            ? Number(Array.isArray(wcRaw) ? wcRaw[0] : wcRaw)
+            : undefined;
+
+    const charId = Number(id);
     if (!Number.isFinite(charId)) notFound();
 
     const character = await getCharacter(charId);
     if (!character) notFound();
 
     const variants = await getCharacterCws(charId);
-    if (!variants || variants.length === 0) {
-        // 조합이 없으면 상세 자체가 의미 없으니 404
-        notFound();
-    }
+    if (!variants || variants.length === 0) notFound();
 
-    // pill 정렬: weaponCode(weaponId) 오름차순 → cwId → 이름
     const sorted = [...variants].sort((a, b) => {
         const ac = a.weaponCode ?? Number.POSITIVE_INFINITY;
         const bc = b.weaponCode ?? Number.POSITIVE_INFINITY;
         if (ac !== bc) return ac - bc;
         if (a.cwId !== b.cwId) return a.cwId - b.cwId;
         return (a.weapon || "").localeCompare(b.weapon || "");
-        // 서버가 이미 정렬해줘도 클라에서 한 번 더 정렬해 안정성 확보
     });
 
-    // 선택 규칙:
-    // 1) ?wc= 지정되면 해당 cwId
-    // 2) 없으면 weaponCode 가장 작은 것
-    // 3) 그마저 없으면 이름 오름차순 첫 번째
-    const wc = searchParams.wc ? Number(searchParams.wc) : undefined;
     let selected = wc ? sorted.find((v) => v.cwId === wc) : undefined;
     if (!selected) {
         selected =
@@ -116,14 +150,13 @@ export default async function Page({
     const currentWeapon = selected?.weapon ?? sorted[0].weapon;
     const overview = selected ? await getCwOverview(selected.cwId) : null;
 
-    // Client가 tier만 쓰므로 최소 구조로 전달
+    // 최소 tier 정보만 전달
     const rMinimal = {
         id: character.id,
         name: character.nameKr,
         tier: "A",
     } as any;
 
-    // 초기 빌드/팀은 현재 선택 무기로 생성 (mock 유지)
     const builds = mockBuildsFor(character.id, currentWeapon);
     const teams = mockTeamsFor(character.id, currentWeapon);
 
@@ -131,12 +164,12 @@ export default async function Page({
         <CharacterDetailClient
             initial={{
                 r: rMinimal,
-                variants: sorted, // Client가 다시 정렬하지만 여기서도 정렬된 걸 전달
+                variants: sorted,
                 currentWeapon,
                 builds,
                 teams,
                 character,
-                overview, // ← { cwId, character, weapon, position, overview:{summary,stats} }
+                overview, // ← { clusters: ["B"], overview:{summary,stats}, ... }
             }}
         />
     );

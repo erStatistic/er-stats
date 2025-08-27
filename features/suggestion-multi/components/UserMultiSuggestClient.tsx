@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CompSuggestion, UserProfile } from "@/types";
 import CompSuggestionCard from "./CompSuggestionCard";
 import { toast } from "sonner";
@@ -9,27 +9,20 @@ import SegmentedTabs, { SegTab } from "./SegmentedTabs";
 import UserAddForm from "./UserAddForm";
 import AddedUsersList from "./AddedUsersList";
 
-/* ---------- 데모 유니버스 ---------- */
-const UNIVERSE: CharItem[] = Array.from({ length: 24 }).map((_, i) => {
-    const id = i + 1;
-    const pool = [
-        ["Axe", "Pistol"],
-        ["Bow", "Rapier"],
-        ["Spear", "Pistol"],
-        ["Axe", "Rapier", "Bow"],
-        ["Bow"],
-        ["Rapier", "Spear"],
-    ];
-    const weapons = pool[i % pool.length];
-    return {
-        id,
-        name: `실험체 ${id}`,
-        imageUrl: `/chars/${(i % 9) + 1}.png`,
-        weapons,
-    };
-});
+/* -------- API 유틸 -------- */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
 
-/* ---------- 모의 통계/추천 ---------- */
+async function fetchJSON<T>(path: string): Promise<T> {
+    const res = await fetch(`${API_BASE}${path}`, {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const j = await res.json();
+    return (j?.data ?? j) as T;
+}
+
+/* -------- 데모 추천 계산(그대로) -------- */
 function hash(s: string) {
     let h = 0;
     for (let i = 0; i < s.length; i++) {
@@ -55,29 +48,13 @@ function compStats(comp: number[]) {
     };
 }
 
-async function fetchUserProfileMock(name: string): Promise<UserProfile> {
-    const idx = Math.abs(hash(name)) % UNIVERSE.length;
-    const top = [
-        UNIVERSE[idx],
-        UNIVERSE[(idx + 3) % UNIVERSE.length],
-        UNIVERSE[(idx + 7) % UNIVERSE.length],
-    ];
-    return {
-        name,
-        topChars: top.map((t) => ({
-            id: t.id,
-            name: t.name,
-            imageUrl: t.imageUrl,
-        })),
-    };
-}
-
+/** poolIds(=DB 캐릭터 id 풀)를 외부에서 주입 */
 function recommendForChars(
     partial: { id: number; weapon?: string }[],
-    opts: { topK?: number; poolLimit?: number } = {},
+    opts: { topK?: number; poolIds: number[] },
 ) {
     const topK = opts.topK ?? 8;
-    const poolLimit = opts.poolLimit ?? UNIVERSE.length;
+    const poolIds = [...new Set(opts.poolIds)];
     const ids = partial.map((p) => p.id);
 
     if (partial.length === 3) {
@@ -99,11 +76,9 @@ function recommendForChars(
         ] as CompSuggestion[];
     }
 
-    const pool = UNIVERSE.map((x) => x.id)
-        .slice(0, poolLimit)
-        .filter((id) => !ids.includes(id));
-
+    const pool = poolIds.filter((id) => !ids.includes(id));
     const out: CompSuggestion[] = [];
+
     for (let i = 0; i < pool.length && out.length < topK * 2; i++) {
         if (partial.length === 1) {
             for (let j = i + 1; j < pool.length && out.length < topK * 2; j++) {
@@ -147,7 +122,7 @@ function recommendForChars(
     return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
 }
 
-/* ---------- 메인 컴포넌트 ---------- */
+/* -------- 메인 컴포넌트 -------- */
 type Tab = "user" | "character";
 type SelectedChar = {
     id: number;
@@ -169,11 +144,33 @@ export default function UserMultiSuggestClient() {
     const [loading, setLoading] = useState(false);
     const [users, setUsers] = useState<UserProfile[]>([]); // 최대 3명
 
-    // 캐릭터 기준
+    // 캐릭터 기준 (DB)
     const [charQ, setCharQ] = useState("");
+    const [characters, setCharacters] = useState<CharItem[]>([]);
     const [selectedChars, setSelectedChars] = useState<SelectedChar[]>([]);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState<CharItem | null>(null);
+
+    // DB에서 캐릭터 목록 로드
+    useEffect(() => {
+        (async () => {
+            try {
+                const rows = await fetchJSON<Array<any>>("/api/v1/characters");
+                const mapped: CharItem[] = rows.map((c) => ({
+                    id: c.id ?? c.ID,
+                    name: c.nameKr ?? c.NameKr ?? c.name ?? "이름 없음",
+                    imageUrl:
+                        c.imageUrlMini ??
+                        c.ImageUrlMini ??
+                        c.imageUrlFull ??
+                        "",
+                }));
+                setCharacters(mapped);
+            } catch {
+                toast.error("캐릭터 목록을 불러오지 못했습니다.");
+            }
+        })();
+    }, []);
 
     // 중복 판정
     const normalizedInput = input.trim().toLowerCase();
@@ -181,12 +178,34 @@ export default function UserMultiSuggestClient() {
         (u) => u.name.trim().toLowerCase() === normalizedInput,
     );
 
+    // (데모) 유저 추가 mock — DB 캐릭터 목록 기반으로 topChars 생성
+    async function fetchUserProfileMock(name: string): Promise<UserProfile> {
+        if (characters.length === 0) {
+            // 캐릭터 로딩 전엔 빈 값
+            return { name, topChars: [] };
+        }
+        const idx = Math.abs(hash(name)) % characters.length;
+        const pick = (k: number) => characters[(idx + k) % characters.length];
+        const top = [
+            pick(0),
+            pick(3 % characters.length),
+            pick(7 % characters.length),
+        ];
+        return {
+            name,
+            topChars: top.map((t) => ({
+                id: t.id,
+                name: t.name,
+                imageUrl: t.imageUrl,
+            })),
+        };
+    }
+
     // 유저 추가
     const addUser = async () => {
         const displayName = input.trim();
         if (!displayName) return;
         if (isDuplicateNow) {
-            // 중복이면 추가하지 않고 입력만 비움
             setInput("");
             return;
         }
@@ -206,17 +225,18 @@ export default function UserMultiSuggestClient() {
     const removeUser = (name: string) =>
         setUsers((p) => p.filter((u) => u.name !== name));
 
-    // 캐릭터 검색/그리드
+    // 카탈로그 필터(이제 DB characters 사용)
     const filteredChars = useMemo(() => {
         const term = charQ.trim().toLowerCase();
         const selectedIds = new Set(selectedChars.map((c) => c.id));
-        return UNIVERSE.filter(
+        return characters.filter(
             (c) =>
                 !selectedIds.has(c.id) &&
                 (!term || c.name.toLowerCase().includes(term)),
-        ).slice(0, 30);
-    }, [charQ, selectedChars]);
+        );
+    }, [charQ, characters, selectedChars]);
 
+    // 캐릭터별 무기는 피커에서 DB 호출
     const openPickerFor = (c: CharItem) => {
         if (selectedChars.length >= 3)
             return toast.error("You can select up to 3 characters.");
@@ -225,7 +245,7 @@ export default function UserMultiSuggestClient() {
     };
 
     const pickWeapon = (id: number, weapon: string) => {
-        const c = UNIVERSE.find((x) => x.id === id);
+        const c = characters.find((x) => x.id === id);
         if (!c) return;
         setSelectedChars((prev) => [
             ...prev,
@@ -236,30 +256,32 @@ export default function UserMultiSuggestClient() {
     const removeChar = (id: number) =>
         setSelectedChars((p) => p.filter((c) => c.id !== id));
 
-    // 추천 결과
+    // 추천 결과 (DB 캐릭터 id 풀 사용)
+    const allIds = useMemo(() => characters.map((c) => c.id), [characters]);
+
     const suggestionsByUser = useMemo(() => {
         if (users.length === 0) return [] as CompSuggestion[];
         const anchorIds = Array.from(
             new Set(users.flatMap((u) => u.topChars.map((t) => t.id))),
         );
         const partial = anchorIds.slice(0, 2).map((id) => ({ id }));
-        return recommendForChars(partial, { topK: 8, poolLimit: 24 });
-    }, [users]);
+        return recommendForChars(partial, { topK: 8, poolIds: allIds });
+    }, [users, allIds]);
 
     const suggestionsByChar = useMemo(() => {
         if (selectedChars.length === 0) return [] as CompSuggestion[];
         return recommendForChars(
             selectedChars.map(({ id, weapon }) => ({ id, weapon })),
-            { topK: 8, poolLimit: 24 },
+            { topK: 8, poolIds: allIds },
         );
-    }, [selectedChars]);
+    }, [selectedChars, allIds]);
 
     const nameById = (id: number) =>
-        UNIVERSE.find((x) => x.id === id)?.name || `ID ${id}`;
+        characters.find((x) => x.id === id)?.name || `ID ${id}`;
 
     return (
         <div className="text-app">
-            {/* 탭바 (PatchClient 스타일) */}
+            {/* 탭바 */}
             <SegmentedTabs
                 tabs={TABS}
                 value={tab}
@@ -288,10 +310,7 @@ export default function UserMultiSuggestClient() {
                                 <CompSuggestionCard
                                     key={i}
                                     s={s}
-                                    nameById={(id) =>
-                                        UNIVERSE.find((x) => x.id === id)
-                                            ?.name || `ID ${id}`
-                                    }
+                                    nameById={nameById}
                                 />
                             ))}
                         </div>
@@ -364,7 +383,7 @@ export default function UserMultiSuggestClient() {
                         </div>
                     </div>
 
-                    {/* Catalog */}
+                    {/* Catalog (DB 캐릭터 목록) */}
                     <details className="card" open>
                         <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
                             Character catalog{" "}
@@ -409,7 +428,7 @@ export default function UserMultiSuggestClient() {
                                         className="text-[10px]"
                                         style={{ color: "var(--text-muted)" }}
                                     >
-                                        {c.weapons.join(" · ")}
+                                        무기 선택을 눌러주세요
                                     </div>
                                 </button>
                             ))}
@@ -466,7 +485,7 @@ export default function UserMultiSuggestClient() {
                 </section>
             )}
 
-            {/* 무기 선택 모달 */}
+            {/* 무기 선택 모달 (DB 연동) */}
             <CharacterWeaponPicker
                 open={pickerOpen}
                 character={pickerTarget}

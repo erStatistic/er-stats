@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TierPill from "@/features/ui/TierPill";
 import VariantPill from "@/features/ui/VariantPill";
-import { Build, TeamComp, CharacterSummary } from "@/types";
+import { Build, TeamComp, CharacterSummary, Role } from "@/types";
 import { formatMMR, formatPercent, formatDuration } from "@/lib/stats";
 import { mockBuildsFor, mockTeamsFor } from "@/lib/mock";
 import ServerCharacter from "@/features/characterDetail/types";
@@ -15,6 +15,8 @@ import StatLine from "@/features/characterDetail/components/StatLine";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
 import { makeTrendSeriesPct } from "@/features/characterDetail/utils";
 import KpiCard from "@/features/characterDetail/components/KpiCard";
+import ClusterBadge from "@/features/cluster-dict/components/ClusterBadge";
+import RolePill from "@/features/ui/RolePill";
 
 type VariantItem = {
     cwId: number;
@@ -173,6 +175,20 @@ export default function CharacterDetailClient({
         router.refresh(); // ← 서버가 새 overview를 fetch하도록 보장
     }
 
+    const positionName =
+        (overview as any)?.position?.name ??
+        (character as any)?.position?.name ??
+        "";
+
+    // 클러스터 배열 (예: ["A","B","K"])
+    const clusters: string[] = useMemo(() => {
+        const c =
+            (character as any)?.clusters ??
+            (overview as any)?.clusters ??
+            (r as any)?.clusters ??
+            [];
+        return Array.isArray(c) ? [...c].sort() : [];
+    }, [character, overview, r]);
     const keyFor = (v: VariantItem, i: number) =>
         Number.isFinite(v.cwId)
             ? `cw-${v.cwId}`
@@ -199,7 +215,6 @@ export default function CharacterDetailClient({
                         <h1 className="text-2xl font-bold truncate">
                             {displayName}
                         </h1>
-                        <TierPill tier={r.tier} />
 
                         {sortedVariants.length > 0 && (
                             <div className="ml-2 flex items-center gap-1 overflow-x-auto">
@@ -215,23 +230,16 @@ export default function CharacterDetailClient({
                         )}
                     </div>
                 </div>
-
-                <button
-                    type="button"
-                    onClick={() => {
-                        if (
-                            typeof window !== "undefined" &&
-                            window.history.length > 1
-                        ) {
-                            router.back();
-                        } else {
-                            router.push("/characters");
-                        }
-                    }}
-                    className="rounded-lg border border-app bg-muted px-3 py-2 text-xs hover:bg-elev-10 whitespace-nowrap"
-                >
-                    ← 목록으로
-                </button>
+                {(positionName || clusters.length > 0) && (
+                    <div className="flex items-center gap-2 overflow-x-auto shrink-0">
+                        {clusters.map((c) => (
+                            <ClusterBadge key={c} label={c} />
+                        ))}
+                        {positionName && (
+                            <RolePill role={positionName as Role} />
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* 상단 카드들 */}

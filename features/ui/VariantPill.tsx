@@ -36,7 +36,7 @@ export default function VariantPill({
             aria-pressed={selected}
             onClick={onClick}
             onMouseUp={(e) => (e.currentTarget as HTMLButtonElement).blur()} // ✅ 클릭 후 포커스 해제
-            className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors hover:opacity-90
+            className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[16px] whitespace-nowrap transition-colors hover:opacity-90
              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand)]/40" // ✅ focus → focus-visible
             style={selected ? selectedStyle : baseStyle}
         >
