@@ -3,7 +3,7 @@
 import React from "react";
 import { CLUSTER_COLOR } from "@/lib/cluster";
 
-function hexToRGBA(input: string, alpha: number): string {
+export function hexToRGBA(input: string, alpha: number): string {
     // 이미 rgba/hsla 문자열이면 그대로 사용
     if (/^(rgba?|hsla?)\(/i.test(input)) return input.replace(/\s+/g, "");
     // #RGB or #RRGGBB
