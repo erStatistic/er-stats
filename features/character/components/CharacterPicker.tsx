@@ -39,7 +39,7 @@ export default function CharacterPicker({
         <section className="card overflow-hidden flex flex-col">
             {/* 검색 바 */}
             <div
-                className="px-4 pt-4 pb-2 flex items-center justify-between gap-2 sticky top-0 z-10"
+                className="px-4 pb-2 flex items-center justify-between gap-2 "
                 style={{ background: "var(--surface)" }}
             >
                 <h3 className="font-semibold text-app">실험체 선택</h3>

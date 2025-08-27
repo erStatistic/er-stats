@@ -14,6 +14,7 @@ import RadarChart from "@/features/characterDetail/components/RadarChart";
 import StatLine from "@/features/characterDetail/components/StatLine";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
 import { makeTrendSeriesPct } from "@/features/characterDetail/utils";
+import KpiCard from "@/features/characterDetail/components/KpiCard";
 
 type VariantItem = {
     cwId: number;
@@ -237,36 +238,29 @@ export default function CharacterDetailClient({
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
                 {/* ① 지표 */}
                 <div className="card p-4 flex flex-col h-full">
-                    <h3 className="mb-2 font-semibold">지표</h3>
-                    <div className="flex-1 flex items-center">
-                        <div className="w-full grid gap-2 min-h-[160px]">
-                            <StatLine
-                                label="승률"
-                                value={formatPercent(winRate ?? 0)}
-                                size="sm"
-                            />
-                            <StatLine
-                                label="픽률"
-                                value={formatPercent(pickRate ?? 0)}
-                                size="sm"
-                            />
-                            <StatLine
-                                label="획득MMR"
-                                value={formatMMR(mmrGain ?? 0, 1)}
-                                size="sm"
-                            />
-                            <StatLine
-                                label="평균 생존시간"
-                                value={
-                                    survivalSec != null
-                                        ? formatDuration(
-                                              Math.round(survivalSec),
-                                          )
-                                        : "—"
-                                }
-                                size="sm"
-                            />
-                        </div>
+                    <h3 className="font-semibold">지표</h3>
+                    <div className="grid grid-cols-2 gap-3 my-auto">
+                        <KpiCard
+                            label="승률"
+                            value={formatPercent(winRate ?? 0)}
+                            // sub="#— / —"  // 랭킹 같은 부라벨을 보여주고 싶으면 여기에
+                        />
+                        <KpiCard
+                            label="픽률"
+                            value={formatPercent(pickRate ?? 0)}
+                        />
+                        <KpiCard
+                            label="획득MMR"
+                            value={formatMMR(mmrGain ?? 0, 1)}
+                        />
+                        <KpiCard
+                            label="평균 생존시간"
+                            value={
+                                survivalSec != null
+                                    ? formatDuration(Math.round(survivalSec))
+                                    : "—"
+                            }
+                        />
                     </div>
                 </div>
 

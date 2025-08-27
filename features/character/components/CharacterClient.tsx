@@ -60,7 +60,7 @@ export default function CharacterClient({
             {/* ① 캐릭터 선택 박스 (DB 데이터) */}
             <CharacterPicker chars={dbChars} />
             {/* ② 통계(테이블) 박스 */}
-            <section className="card overflow-hidden">
+            <section className="card ">
                 <div className="mb-3 px-4 pt-4 flex flex-wrap items-center gap-2">
                     {/* 검색(표 전용) */}
                     <input
