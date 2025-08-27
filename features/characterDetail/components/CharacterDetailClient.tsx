@@ -1,7 +1,7 @@
 // features/characterDetail/components/CharacterDetailClient.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TierPill from "@/features/ui/TierPill";
 import VariantPill from "@/features/ui/VariantPill";
@@ -15,10 +15,13 @@ import StatLine from "@/features/characterDetail/components/StatLine";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
 import { makeTrendSeriesPct } from "@/features/characterDetail/utils";
 
-// DB에서 오는 variant 뷰 모델
-type VariantItem = { cwId: number; weapon: string; weaponImageUrl?: string };
+type VariantItem = {
+    cwId: number;
+    weapon: string;
+    weaponCode?: number;
+    weaponImageUrl?: string;
+};
 
-// overview(중첩/평탄 둘 다 허용)
 type OverviewBox = {
     summary?: {
         winRate?: number;
@@ -28,6 +31,7 @@ type OverviewBox = {
     };
     stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
 };
+
 type CwOverview =
     | (OverviewBox & {
           cwId: number;
@@ -48,15 +52,15 @@ export default function CharacterDetailClient({
 }: {
     initial: {
         r: CharacterSummary; // tier만 사용
-        variants: VariantItem[]; // ✅ DB 리스트
-        currentWeapon?: string;
+        variants: VariantItem[]; // 서버 제공
+        currentWeapon?: string; // 서버가 선택한 무기 문자열
         builds: Build[];
         teams: TeamComp[];
         character?: ServerCharacter & {
             imageUrlMini?: string;
             imageUrlFull?: string;
         };
-        overview?: CwOverview;
+        overview?: CwOverview; // { ... , overview:{ summary, stats } }
     };
 }) {
     const router = useRouter();
@@ -78,11 +82,37 @@ export default function CharacterDetailClient({
         character?.imageUrlFull ??
         `/chars/${displayId % 9 || 1}.png`;
 
+    // pill 정렬(weaponCode → cwId → 이름)
+    const sortedVariants = useMemo(() => {
+        const arr = [...(variants ?? [])];
+        arr.sort((a, b) => {
+            const ac = a.weaponCode ?? Number.POSITIVE_INFINITY;
+            const bc = b.weaponCode ?? Number.POSITIVE_INFINITY;
+            if (ac !== bc) return ac - bc;
+            if (a.cwId !== b.cwId) return a.cwId - b.cwId;
+            return (a.weapon || "").localeCompare(b.weapon || "");
+        });
+        return arr;
+    }, [variants]);
+
+    // 선택값: 서버가 정해준 currentWeapon을 신뢰
     const [selectedWeapon, setSelectedWeapon] = useState(
-        currentWeapon ?? variants[0]?.weapon ?? "",
+        currentWeapon ?? sortedVariants[0]?.weapon ?? "",
     );
-    const [builds, setBuilds] = useState(initBuilds);
-    const [teams, setTeams] = useState(initTeams);
+    const [builds, setBuilds] = useState<Build[]>(
+        initBuilds ?? mockBuildsFor(displayId, selectedWeapon),
+    );
+    const [teams, setTeams] = useState<TeamComp[]>(
+        initTeams ?? mockTeamsFor(displayId, selectedWeapon),
+    );
+
+    // 🔁 서버가 새 props(currentWeapon/overview)를 주면 동기화
+    useEffect(() => {
+        const next = currentWeapon ?? sortedVariants[0]?.weapon ?? "";
+        setSelectedWeapon(next);
+        setBuilds(mockBuildsFor(displayId, next));
+        setTeams(mockTeamsFor(displayId, next));
+    }, [currentWeapon, sortedVariants, displayId]);
 
     // overview 중첩/평탄 통합
     const ov: OverviewBox | undefined = useMemo(() => {
@@ -93,7 +123,7 @@ export default function CharacterDetailClient({
             : { summary: any.summary, stats: any.stats };
     }, [overview]);
 
-    // 지표는 overview 우선
+    // 지표
     const winRate = ov?.summary?.winRate ?? 0;
     const pickRate = ov?.summary?.pickRate ?? 0;
     const mmrGain = ov?.summary?.mmrGain ?? 0;
@@ -131,13 +161,23 @@ export default function CharacterDetailClient({
     );
     const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
 
-    // ✅ 무기 pill 클릭: 같은 페이지로 쿼리 wc=cwId 교체 → 서버가 새 overview 로드
+    // ✅ pill 클릭: URL wc 갱신 + 서버 데이터 강제 새로고침
     function goWeapon(v: VariantItem) {
-        setSelectedWeapon(v.weapon); // 즉시 UI 반영
-        setBuilds(mockBuildsFor(displayId, v.weapon)); // 필요 시 유지
+        setSelectedWeapon(v.weapon); // 즉시 UI 표시
+        setBuilds(mockBuildsFor(displayId, v.weapon));
         setTeams(mockTeamsFor(displayId, v.weapon));
-        router.replace(`/characters/${displayId}?wc=${v.cwId}`);
+        router.replace(`/characters/${displayId}?wc=${v.cwId}`, {
+            scroll: false,
+        });
+        router.refresh(); // ← 서버가 새 overview를 fetch하도록 보장
     }
+
+    const keyFor = (v: VariantItem, i: number) =>
+        Number.isFinite(v.cwId)
+            ? `cw-${v.cwId}`
+            : Number.isFinite(v.weaponCode)
+              ? `code-${v.weaponCode}-${i}`
+              : `idx-${i}`;
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
@@ -160,12 +200,11 @@ export default function CharacterDetailClient({
                         </h1>
                         <TierPill tier={r.tier} />
 
-                        {variants.length > 0 && (
+                        {sortedVariants.length > 0 && (
                             <div className="ml-2 flex items-center gap-1 overflow-x-auto">
-                                {variants.map((v) => (
+                                {sortedVariants.map((v, i) => (
                                     <VariantPill
-                                        key={v.cwId}
-                                        // VariantPill이 v.weapon만 써도 되도록 맞춰서 전달
+                                        key={keyFor(v, i)}
                                         v={{ weapon: v.weapon } as any}
                                         selected={v.weapon === selectedWeapon}
                                         onClick={() => goWeapon(v)}
@@ -182,9 +221,11 @@ export default function CharacterDetailClient({
                         if (
                             typeof window !== "undefined" &&
                             window.history.length > 1
-                        )
+                        ) {
                             router.back();
-                        else router.push("/characters");
+                        } else {
+                            router.push("/characters");
+                        }
                     }}
                     className="rounded-lg border border-app bg-muted px-3 py-2 text-xs hover:bg-elev-10 whitespace-nowrap"
                 >
@@ -303,7 +344,6 @@ export default function CharacterDetailClient({
                             <div className="text-xs text-muted-app mt-1">
                                 {b.description}
                             </div>
-
                             <div className="mt-3 flex flex-wrap gap-1 text-xs">
                                 {b.items.map((it, i) => (
                                     <span
@@ -333,7 +373,6 @@ export default function CharacterDetailClient({
                             <div className="text-xs text-muted-app mt-1">
                                 {t.note || "—"}
                             </div>
-
                             <div className="mt-3 flex flex-wrap gap-1 text-xs">
                                 {t.members.map((m) => (
                                     <span
