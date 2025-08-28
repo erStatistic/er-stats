@@ -1,3 +1,4 @@
+// features/suggest/UserMultiSuggestClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -9,7 +10,7 @@ import SegmentedTabs, { SegTab } from "./SegmentedTabs";
 import UserAddForm from "./UserAddForm";
 import AddedUsersList from "./AddedUsersList";
 
-/* -------- API 유틸 -------- */
+/* ============== API 유틸 ============== */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
 
 async function fetchJSON<T>(path: string): Promise<T> {
@@ -22,7 +23,7 @@ async function fetchJSON<T>(path: string): Promise<T> {
     return (j?.data ?? j) as T;
 }
 
-/* -------- 데모 추천 계산(그대로) -------- */
+/* ============== 데모 점수 생성기(그대로) ============== */
 function hash(s: string) {
     let h = 0;
     for (let i = 0; i < s.length; i++) {
@@ -48,81 +49,107 @@ function compStats(comp: number[]) {
     };
 }
 
-/** poolIds(=DB 캐릭터 id 풀)를 외부에서 주입 */
-function recommendForChars(
-    partial: { id: number; weapon?: string }[],
-    opts: { topK?: number; poolIds: number[] },
-) {
-    const topK = opts.topK ?? 8;
-    const poolIds = [...new Set(opts.poolIds)];
-    const ids = partial.map((p) => p.id);
+/* ============================================================
+   ★ 변경된 핵심 로직 ★
+   - users가 3명 이상: 각 유저의 Top(최대 3개)에서 1명씩 뽑아 조합
+   - users가 2명    : 두 유저의 Top에서 1명씩 + 나머지 1명은 "전체 풀"에서 채움
+   - users가 1명    : 해당 유저의 Top에서 1명 + 나머지 2명은 "전체 풀"에서 채움
+   - 전체 풀: DB의 모든 캐릭터 ID
+   ============================================================ */
+function suggestionsFromUsersTopWithPool(
+    users: UserProfile[],
+    poolIds: number[],
+    topK = 8,
+): CompSuggestion[] {
+    const lists = users
+        .map((u) =>
+            Array.from(new Set(u.topChars.map((t) => t.id))).slice(0, 3),
+        )
+        .filter((arr) => arr.length > 0);
 
-    if (partial.length === 3) {
-        const { winRate, pickRate, mmrGain, count } = compStats(ids);
-        return [
-            {
-                comp: ids.slice(0, 3),
-                winRateEst: winRate,
-                pickRateEst: pickRate,
-                mmrGainEst: mmrGain,
-                support: {
-                    fromPairs: 0.33,
-                    fromSolo: 0.33,
-                    fromCluster: 0.34,
-                    modeled: false,
-                },
-                note: `samples: ${count}`,
-            },
-        ] as CompSuggestion[];
-    }
+    if (lists.length === 0) return [];
 
-    const pool = poolIds.filter((id) => !ids.includes(id));
+    const POOL = Array.from(new Set(poolIds));
+    const seen = new Set<string>();
     const out: CompSuggestion[] = [];
+    const MAX_GEN = topK * 40; // 무한루프/과도한 생성 방지용
 
-    for (let i = 0; i < pool.length && out.length < topK * 2; i++) {
-        if (partial.length === 1) {
-            for (let j = i + 1; j < pool.length && out.length < topK * 2; j++) {
-                const comp = [ids[0], pool[i], pool[j]];
-                const { winRate, pickRate, mmrGain, count } = compStats(comp);
-                out.push({
-                    comp,
-                    winRateEst: winRate,
-                    pickRateEst: pickRate,
-                    mmrGainEst: mmrGain,
-                    support: {
-                        fromPairs: 0.5,
-                        fromSolo: 0.2,
-                        fromCluster: 0.3,
-                        modeled: true,
-                    },
-                    note: `samples: ${count}`,
-                });
+    const pushComp = (comp: number[], modeled: boolean) => {
+        const key = comp
+            .slice()
+            .sort((a, b) => a - b)
+            .join("-");
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const { winRate, pickRate, mmrGain, count } = compStats(comp);
+        out.push({
+            comp,
+            winRateEst: winRate,
+            pickRateEst: pickRate,
+            mmrGainEst: mmrGain,
+            support: modeled
+                ? {
+                      fromPairs: 0.4,
+                      fromSolo: 0.25,
+                      fromCluster: 0.35,
+                      modeled: true,
+                  }
+                : {
+                      fromPairs: 0.33,
+                      fromSolo: 0.33,
+                      fromCluster: 0.34,
+                      modeled: false,
+                  },
+            note: `samples: ${count}`,
+        });
+    };
+
+    if (lists.length >= 3) {
+        const [A, B, C] = lists;
+        outer3: for (const a of A)
+            for (const b of B)
+                for (const c of C) {
+                    if (a === b || b === c || a === c) continue;
+                    pushComp([a, b, c], false);
+                    if (out.length >= MAX_GEN) break outer3;
+                }
+    } else if (lists.length === 2) {
+        const [A, B] = lists;
+        outer2: for (const a of A)
+            for (const b of B) {
+                if (a === b) continue;
+                // 나머지 1명을 "전체 풀"에서 뽑기
+                for (const c of POOL) {
+                    if (c === a || c === b) continue;
+                    pushComp([a, b, c], true);
+                    if (out.length >= MAX_GEN) break outer2;
+                }
             }
-        } else if (partial.length === 2) {
-            const comp = [ids[0], ids[1], pool[i]];
-            const { winRate, pickRate, mmrGain, count } = compStats(comp);
-            out.push({
-                comp,
-                winRateEst: winRate,
-                pickRateEst: pickRate,
-                mmrGainEst: mmrGain,
-                support: {
-                    fromPairs: 0.4,
-                    fromSolo: 0.25,
-                    fromCluster: 0.35,
-                    modeled: true,
-                },
-                note: `samples: ${count}`,
-            });
+    } else {
+        const A = lists[0];
+        // 1명의 유저: Top에서 1명 + 전체 풀에서 2명
+        outer1: for (const a of A) {
+            for (let i = 0; i < POOL.length; i++) {
+                const b = POOL[i];
+                if (b === a) continue;
+                for (let j = i + 1; j < POOL.length; j++) {
+                    const c = POOL[j];
+                    if (c === a || c === b) continue;
+                    pushComp([a, b, c], true);
+                    if (out.length >= MAX_GEN) break outer1;
+                }
+            }
         }
     }
 
     const score = (c: CompSuggestion) =>
-        c.winRate * 1.2 + c.mmrGain / 15 + c.pickRate * 0.6;
+        c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
+
     return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
 }
 
-/* -------- 메인 컴포넌트 -------- */
+/* ============== 메인 컴포넌트 ============== */
 type Tab = "user" | "character";
 type SelectedChar = {
     id: number;
@@ -151,7 +178,7 @@ export default function UserMultiSuggestClient() {
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState<CharItem | null>(null);
 
-    // DB에서 캐릭터 목록 로드
+    /* DB 캐릭터 목록 로드 */
     useEffect(() => {
         (async () => {
             try {
@@ -172,16 +199,15 @@ export default function UserMultiSuggestClient() {
         })();
     }, []);
 
-    // 중복 판정
+    /* 유저 입력 중복 */
     const normalizedInput = input.trim().toLowerCase();
     const isDuplicateNow = users.some(
         (u) => u.name.trim().toLowerCase() === normalizedInput,
     );
 
-    // (데모) 유저 추가 mock — DB 캐릭터 목록 기반으로 topChars 생성
+    /* 데모용 유저 프로필 (DB 캐릭터 기반) */
     async function fetchUserProfileMock(name: string): Promise<UserProfile> {
         if (characters.length === 0) {
-            // 캐릭터 로딩 전엔 빈 값
             return { name, topChars: [] };
         }
         const idx = Math.abs(hash(name)) % characters.length;
@@ -201,7 +227,7 @@ export default function UserMultiSuggestClient() {
         };
     }
 
-    // 유저 추가
+    /* 유저 추가/삭제 */
     const addUser = async () => {
         const displayName = input.trim();
         if (!displayName) return;
@@ -225,7 +251,7 @@ export default function UserMultiSuggestClient() {
     const removeUser = (name: string) =>
         setUsers((p) => p.filter((u) => u.name !== name));
 
-    // 카탈로그 필터(이제 DB characters 사용)
+    /* 카탈로그 필터 */
     const filteredChars = useMemo(() => {
         const term = charQ.trim().toLowerCase();
         const selectedIds = new Set(selectedChars.map((c) => c.id));
@@ -236,14 +262,13 @@ export default function UserMultiSuggestClient() {
         );
     }, [charQ, characters, selectedChars]);
 
-    // 캐릭터별 무기는 피커에서 DB 호출
+    /* 무기 선택 모달 */
     const openPickerFor = (c: CharItem) => {
         if (selectedChars.length >= 3)
             return toast.error("You can select up to 3 characters.");
         setPickerTarget(c);
         setPickerOpen(true);
     };
-
     const pickWeapon = (id: number, weapon: string) => {
         const c = characters.find((x) => x.id === id);
         if (!c) return;
@@ -252,36 +277,68 @@ export default function UserMultiSuggestClient() {
             { id: c.id, name: c.name, imageUrl: c.imageUrl, weapon },
         ]);
     };
-
     const removeChar = (id: number) =>
         setSelectedChars((p) => p.filter((c) => c.id !== id));
 
-    // 추천 결과 (DB 캐릭터 id 풀 사용)
+    /* 결과 계산 */
     const allIds = useMemo(() => characters.map((c) => c.id), [characters]);
 
+    // ★ User 탭: 변경된 로직 적용 (poolIds 사용)
     const suggestionsByUser = useMemo(() => {
         if (users.length === 0) return [] as CompSuggestion[];
-        const anchorIds = Array.from(
-            new Set(users.flatMap((u) => u.topChars.map((t) => t.id))),
-        );
-        const partial = anchorIds.slice(0, 2).map((id) => ({ id }));
-        return recommendForChars(partial, { topK: 8, poolIds: allIds });
+        return suggestionsFromUsersTopWithPool(users, allIds, 8);
     }, [users, allIds]);
 
+    // Character 탭: 선택 캐릭터들로 조합 생성(기존 데모)
     const suggestionsByChar = useMemo(() => {
         if (selectedChars.length === 0) return [] as CompSuggestion[];
-        return recommendForChars(
-            selectedChars.map(({ id, weapon }) => ({ id, weapon })),
-            { topK: 8, poolIds: allIds },
-        );
-    }, [selectedChars, allIds]);
+        const ids = selectedChars.map((c) => c.id);
+        const out: CompSuggestion[] = [];
+        const seen = new Set<string>();
+
+        const pushComp = (comp: number[]) => {
+            const key = comp
+                .slice()
+                .sort((a, b) => a - b)
+                .join("-");
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            const { winRate, pickRate, mmrGain, count } = compStats(comp);
+            out.push({
+                comp,
+                winRateEst: winRate,
+                pickRateEst: pickRate,
+                mmrGainEst: mmrGain,
+                support: {
+                    fromPairs: 0.5,
+                    fromSolo: 0.2,
+                    fromCluster: 0.3,
+                    modeled: true,
+                },
+                note: `samples: ${count}`,
+            });
+        };
+
+        if (ids.length >= 3) {
+            for (let i = 0; i < ids.length; i++)
+                for (let j = i + 1; j < ids.length; j++)
+                    for (let k = j + 1; k < ids.length; k++)
+                        pushComp([ids[i], ids[j], ids[k]]);
+        }
+
+        const score = (c: CompSuggestion) =>
+            c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
+
+        return out.sort((a, b) => score(b) - score(a)).slice(0, 8);
+    }, [selectedChars]);
 
     const nameById = (id: number) =>
         characters.find((x) => x.id === id)?.name || `ID ${id}`;
 
+    /* ============== Render ============== */
     return (
         <div className="text-app">
-            {/* 탭바 */}
             <SegmentedTabs
                 tabs={TABS}
                 value={tab}
@@ -289,7 +346,7 @@ export default function UserMultiSuggestClient() {
                 ariaLabel="추천 기준 선택"
             />
 
-            {/* ============== User tab ============== */}
+            {/* -------- User tab -------- */}
             {tab === "user" && (
                 <section className="space-y-4">
                     <UserAddForm
@@ -305,30 +362,40 @@ export default function UserMultiSuggestClient() {
                     <AddedUsersList users={users} onRemove={removeUser} />
 
                     {users.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {suggestionsByUser.map((s, i) => (
-                                <CompSuggestionCard
-                                    key={i}
-                                    s={s}
-                                    nameById={nameById}
-                                />
-                            ))}
-                        </div>
+                        <>
+                            <div
+                                className="text-xs mb-1"
+                                style={{ color: "var(--text-muted)" }}
+                            >
+                                * 조합은 각 유저의 Top(최대 3개)에서 고정 앵커를
+                                잡고, 부족한 자리는 <b>전체 캐릭터 풀</b>에서
+                                보완합니다.
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {suggestionsByUser.map((s, i) => (
+                                    <CompSuggestionCard
+                                        key={i}
+                                        s={s}
+                                        nameById={nameById}
+                                    />
+                                ))}
+                            </div>
+                        </>
                     ) : (
                         <div
                             className="mt-10 text-sm"
                             style={{ color: "var(--text-muted)" }}
                         >
-                            Add 1–3 users to see personalized team suggestions.
+                            Add 1–3 users to see team suggestions.
                         </div>
                     )}
                 </section>
             )}
 
-            {/* ============== Character tab ============== */}
+            {/* -------- Character tab -------- */}
             {tab === "character" && (
                 <section className="space-y-5">
-                    {/* Selected characters */}
+                    {/* Selected */}
                     <div className="card">
                         <div
                             className="text-sm"
@@ -383,7 +450,7 @@ export default function UserMultiSuggestClient() {
                         </div>
                     </div>
 
-                    {/* Catalog (DB 캐릭터 목록) */}
+                    {/* Catalog */}
                     <details className="card p-0 overflow-hidden" open>
                         <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
                             Character catalog{" "}
@@ -395,7 +462,6 @@ export default function UserMultiSuggestClient() {
                             </span>
                         </summary>
 
-                        {/* 검색 바: 스크롤 상단에 고정 */}
                         <div className="px-4 py-3 border-t border-app sticky top-0 bg-surface z-10">
                             <input
                                 className="w-72 rounded-xl border px-3 py-2 text-sm outline-none"
@@ -410,7 +476,6 @@ export default function UserMultiSuggestClient() {
                             />
                         </div>
 
-                        {/* 👇 여기 래퍼에 고정 높이 + 스크롤 */}
                         <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                                 {filteredChars.map((c) => (
@@ -432,6 +497,7 @@ export default function UserMultiSuggestClient() {
                             </div>
                         </div>
                     </details>
+
                     {/* Results */}
                     {selectedChars.length === 0 ? (
                         <div
@@ -441,7 +507,7 @@ export default function UserMultiSuggestClient() {
                             Pick 1–3 characters and optionally weapons to see
                             recommendations.
                         </div>
-                    ) : selectedChars.length < 3 ? (
+                    ) : (
                         <>
                             <div
                                 className="text-sm mb-2"
@@ -460,31 +526,13 @@ export default function UserMultiSuggestClient() {
                                 ))}
                             </div>
                         </>
-                    ) : (
-                        <>
-                            <div
-                                className="text-sm mb-2"
-                                style={{ color: "var(--text-muted)" }}
-                            >
-                                Performance of the selected trio
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {suggestionsByChar.map((s, i) => (
-                                    <CompSuggestionCard
-                                        key={i}
-                                        s={s}
-                                        nameById={nameById}
-                                    />
-                                ))}
-                            </div>
-                        </>
                     )}
                 </section>
             )}
 
-            {/* 무기 선택 모달 (DB 연동) */}
+            {/* 무기 선택 모달 */}
             <CharacterWeaponPicker
-                key={pickerTarget?.id ?? "none"} // ← 추가!
+                key={pickerTarget?.id ?? "none"}
                 open={pickerOpen}
                 character={pickerTarget}
                 onClose={() => setPickerOpen(false)}
