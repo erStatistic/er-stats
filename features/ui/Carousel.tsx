@@ -190,7 +190,8 @@ export default function Carousel({
                             prev();
                         }}
                         onPointerDownCapture={(e) => e.stopPropagation()}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 btn bg-muted border-app text-app hidden sm:inline-flex"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60
+                       hidden sm:inline-flex z-20 pointer-events-auto"
                         aria-label="이전"
                     >
                         <ChevronLeft />
