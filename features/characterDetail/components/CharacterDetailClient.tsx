@@ -1,6 +1,6 @@
 // features/characterDetail/components/CharacterDetailClient.tsx
 "use client";
-
+import { Copy, Check } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TierPill from "@/features/ui/TierPill";
@@ -196,6 +196,7 @@ export default function CharacterDetailClient({
               ? `code-${v.weaponCode}-${i}`
               : `idx-${i}`;
 
+    const [copied, setCopied] = useState<number | null>(null);
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
@@ -335,10 +336,61 @@ export default function CharacterDetailClient({
             {/* 추천 빌드 */}
             <section className="mb-6">
                 <h2 className="text-lg font-semibold mb-2">추천 빌드</h2>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
                     {overview?.overview?.routes?.map((b) => (
-                        <div key={b.id} className="card p-4">
-                            <div className="font-medium text-app">{b.id}</div>
+                        <div key={b.id} className="card p-4 relative">
+                            {/* 우측 상단: 복사 아이콘 버튼 */}
+                            <button
+                                type="button"
+                                className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md border border-app/40 bg-elev-5 hover:bg-elev-10 text-muted-app hover:text-app transition focus:outline-none focus:ring-2 focus:ring-app/40"
+                                aria-label={`루트 ID ${b.id} 복사`}
+                                title={copied === b.id ? "복사됨!" : "복사"}
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    const text = String(b.id);
+                                    try {
+                                        if (
+                                            navigator.clipboard &&
+                                            window.isSecureContext
+                                        ) {
+                                            await navigator.clipboard.writeText(
+                                                text,
+                                            );
+                                        } else {
+                                            const ta =
+                                                document.createElement(
+                                                    "textarea",
+                                                );
+                                            ta.value = text;
+                                            ta.style.position = "fixed";
+                                            ta.style.left = "-9999px";
+                                            document.body.appendChild(ta);
+                                            ta.select();
+                                            document.execCommand("copy");
+                                            document.body.removeChild(ta);
+                                        }
+                                        setCopied(b.id);
+                                        setTimeout(() => {
+                                            setCopied((cur) =>
+                                                cur === b.id ? null : cur,
+                                            );
+                                        }, 1200);
+                                    } catch (err) {
+                                        console.error("Copy failed:", err);
+                                    }
+                                }}
+                            >
+                                {copied === b.id ? (
+                                    <Check size={16} aria-hidden />
+                                ) : (
+                                    <Copy size={16} aria-hidden />
+                                )}
+                                <span className="sr-only">복사</span>
+                            </button>
+
+                            <div className="font-medium text-app">
+                                루트 번호: {b.id}
+                            </div>
                             <div className="text-xs text-muted-app mt-1">
                                 {b.title || "추천"}
                             </div>
