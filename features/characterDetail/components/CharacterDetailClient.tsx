@@ -334,38 +334,21 @@ export default function CharacterDetailClient({
 
             {/* 추천 빌드 */}
             <section className="mb-6">
-                <h2 className="text-lg font-semibold mb-2">
-                    {selectedWeapon || "—"} 추천 빌드
-                </h2>
+                <h2 className="text-lg font-semibold mb-2">추천 빌드</h2>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {builds.map((b) => (
+                    {overview?.overview?.routes?.map((b) => (
                         <div key={b.id} className="card p-4">
-                            <div className="font-medium text-app">
-                                {b.title}
-                            </div>
+                            <div className="font-medium text-app">{b.id}</div>
                             <div className="text-xs text-muted-app mt-1">
-                                {b.description}
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-1 text-xs">
-                                {b.items.map((it, i) => (
-                                    <span
-                                        key={i}
-                                        className="muted-strip px-2 py-1"
-                                    >
-                                        {it}
-                                    </span>
-                                ))}
+                                {b.title || "추천"}
                             </div>
                         </div>
                     ))}
                 </div>
             </section>
-
             {/* 추천 팀 조합 */}
             <section>
-                <h2 className="text-lg font-semibold mb-2">
-                    {selectedWeapon || "—"} 추천 팀 조합
-                </h2>
+                <h2 className="text-lg font-semibold mb-2">추천 팀 조합</h2>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {teams.map((t) => (
                         <div key={t.id} className="card p-4">
