@@ -37,9 +37,9 @@ async function getCharacter(id: number): Promise<ServerCharacter | null> {
     const d = j.data;
     return {
         id: d.ID ?? d.id,
-        nameKr: d.NameKr ?? d.nameKr ?? d.Name ?? d.name ?? "이름 없음",
-        imageUrlMini: (d.ImageUrlMini ?? d.imageUrlMini ?? "").trim(),
-        imageUrlFull: (d.ImageUrlFull ?? d.imageUrlFull ?? "").trim(),
+        nameKr: d.name_kr ?? "이름 없음",
+        imageUrlMini: (d.image_url_mini ?? "").trim(),
+        imageUrlFull: (d.image_url_full ?? "").trim(),
     };
 }
 

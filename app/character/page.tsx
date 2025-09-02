@@ -18,6 +18,7 @@ export default async function CharacterStatPage() {
     }> = [];
     try {
         dbChars = await serverListCharacters();
+        console.log("dbChars");
     } catch (e) {
         console.error("[characters] list failed:", e);
     }

@@ -40,8 +40,8 @@ async function getCharacter(id: number): Promise<Character | null> {
     console.log("[getCharacter] GET", `${base}/api/v1/characters/${id}`);
     return {
         id: d.ID,
-        nameKr: d.NameKr,
-        imageUrlMini: (d.ImageUrlMini ?? "").trim(), // 빈 문자열일 수 있음
-        imageUrlFull: (d.ImageUrlFull ?? "").trim(), // 빈 문자열일 수 있음
+        nameKr: d.name_kr,
+        imageUrlMini: (d.image_url_mini ?? "").trim(), // 빈 문자열일 수 있음
+        imageUrlFull: (d.image_url_full ?? "").trim(),
     };
 }
