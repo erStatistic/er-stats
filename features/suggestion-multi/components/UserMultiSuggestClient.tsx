@@ -278,12 +278,8 @@ export default function UserMultiSuggestClient() {
                 const rows = await fetchJSON<Array<any>>("/api/v1/characters");
                 const mapped: CharItem[] = rows.map((c) => ({
                     id: c.id ?? c.ID,
-                    name: c.nameKr ?? c.NameKr ?? c.name ?? "이름 없음",
-                    imageUrl:
-                        c.imageUrlMini ??
-                        c.ImageUrlMini ??
-                        c.imageUrlFull ??
-                        "",
+                    name: c.name_kr ?? "이름 없음",
+                    imageUrl: c.image_url_mini ?? "",
                 }));
                 setCharacters(mapped);
             } catch {
