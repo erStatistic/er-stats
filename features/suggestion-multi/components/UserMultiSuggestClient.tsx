@@ -245,7 +245,7 @@ type CwLite = {
 };
 
 const TABS: SegTab[] = [
-    { value: "user", label: "By User" },
+    // { value: "user", label: "By User" },
     { value: "character", label: "By Character" },
 ];
 
@@ -431,233 +431,223 @@ export default function UserMultiSuggestClient() {
     /* ============== Render ============== */
     return (
         <div className="text-app">
-            <SegmentedTabs
-                tabs={TABS}
-                value={tab}
-                onChange={(v) => setTab(v as Tab)}
-                ariaLabel="추천 기준 선택"
-            />
+            {/* <SegmentedTabs */}
+            {/*     tabs={TABS} */}
+            {/*     value={tab} */}
+            {/*     onChange={(v) => setTab(v as Tab)} */}
+            {/*     ariaLabel="추천 기준 선택" */}
+            {/* /> */}
 
-            {/* ───────────── User 탭 ───────────── */}
-            {tab === "user" && (
-                <section className="space-y-4">
-                    <UserAddForm
-                        input={input}
-                        setInput={setInput}
-                        loading={loading}
-                        usersLength={users.length}
-                        isDuplicate={dup}
-                        onAdd={addUser}
-                        onClearAll={() => {
-                            setUsers([]);
-                            setPicksByUser({}); // ← 선택도 같이 초기화
-                        }}
-                    />
-
-                    {/* ✅ 선택 상태는 부모가 소유하고 자식은 컨트롤드 렌더만 */}
-                    <Suspense fallback={null}>
-                        {mounted ? (
-                            <AddedUsersList
-                                key={users.map((u) => u.name).join("|")}
-                                users={users}
-                                onRemove={removeUser}
-                                picks={picksByUser}
-                                onPickChange={handlePickChange}
-                            />
-                        ) : null}
-                    </Suspense>
-                </section>
-            )}
+            {/*  ───────────── User 탭 ───────────── */}
+            {/* {tab === "user" && ( */}
+            {/*     <section className="space-y-4"> */}
+            {/*         <UserAddForm */}
+            {/*             input={input} */}
+            {/*             setInput={setInput} */}
+            {/*             loading={loading} */}
+            {/*             usersLength={users.length} */}
+            {/*             isDuplicate={dup} */}
+            {/*             onAdd={addUser} */}
+            {/*             onClearAll={() => { */}
+            {/*                 setUsers([]); */}
+            {/*                 setPicksByUser({}); // ← 선택도 같이 초기화 */}
+            {/*             }} */}
+            {/*         /> */}
+            {/**/}
+            {/*          ✅ 선택 상태는 부모가 소유하고 자식은 컨트롤드 렌더만  */}
+            {/*         <Suspense fallback={null}> */}
+            {/*             {mounted ? ( */}
+            {/*                 <AddedUsersList */}
+            {/*                     key={users.map((u) => u.name).join("|")} */}
+            {/*                     users={users} */}
+            {/*                     onRemove={removeUser} */}
+            {/*                     picks={picksByUser} */}
+            {/*                     onPickChange={handlePickChange} */}
+            {/*                 /> */}
+            {/*             ) : null} */}
+            {/*         </Suspense> */}
+            {/*     </section> */}
+            {/* )} */}
 
             {/* ───────────── Character 탭(기존) ───────────── */}
-            {tab === "character" && (
-                <section className="space-y-5">
-                    <div className="card">
-                        <div
-                            className="text-sm"
-                            style={{ color: "var(--text-muted)" }}
-                        >
-                            Selected characters ({selectedChars.length}/3)
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                            {selectedChars.map((c) => (
-                                <span
-                                    key={c.id}
-                                    className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5"
-                                    style={{
-                                        borderColor: "var(--border)",
-                                        background: "var(--surface)",
-                                    }}
-                                >
-                                    <img
-                                        src={c.imageUrl}
-                                        alt={c.name}
-                                        className="w-6 h-6 rounded-full object-cover"
-                                    />
-                                    <span className="text-xs">{c.name}</span>
-                                    {c.weapon && (
-                                        <span className="text-[10px] opacity-80">
-                                            ({c.weapon})
-                                        </span>
-                                    )}
-                                    <button
-                                        className="text-[10px] opacity-70 hover:opacity-100"
-                                        onClick={() => removeChar(c.id)}
-                                        title="Remove"
-                                    >
-                                        ✕
-                                    </button>
-                                </span>
-                            ))}
-                            {selectedChars.length > 0 && (
-                                <button
-                                    onClick={() => setSelectedChars([])}
-                                    className="rounded-xl border px-2 py-1 text-xs transition"
-                                    style={{ borderColor: "var(--border)" }}
-                                >
-                                    Clear all
-                                </button>
-                            )}
-                        </div>
+            <section className="space-y-5">
+                <div className="card">
+                    <div
+                        className="text-sm"
+                        style={{ color: "var(--text-muted)" }}
+                    >
+                        Selected characters ({selectedChars.length}/3)
                     </div>
-
-                    <details className="card p-0 overflow-hidden" open>
-                        <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
-                            Character catalog{" "}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedChars.map((c) => (
                             <span
-                                className="text-xs"
-                                style={{ color: "var(--text-muted)" }}
-                            >
-                                ({filteredChars.length})
-                            </span>
-                        </summary>
-
-                        <div className="px-4 py-3 border-t border-app sticky top-0 bg-surface z-10">
-                            <input
-                                className="w-72 rounded-xl border px-3 py-2 text-sm outline-none"
+                                key={c.id}
+                                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5"
                                 style={{
                                     borderColor: "var(--border)",
                                     background: "var(--surface)",
                                 }}
-                                placeholder="Search characters"
-                                value={charQ}
-                                onChange={(e) => setCharQ(e.target.value)}
-                            />
-                        </div>
+                            >
+                                <img
+                                    src={c.imageUrl}
+                                    alt={c.name}
+                                    className="w-6 h-6 rounded-full object-cover"
+                                />
+                                <span className="text-xs">{c.name}</span>
+                                {c.weapon && (
+                                    <span className="text-[10px] opacity-80">
+                                        ({c.weapon})
+                                    </span>
+                                )}
+                                <button
+                                    className="text-[10px] opacity-70 hover:opacity-100"
+                                    onClick={() => removeChar(c.id)}
+                                    title="Remove"
+                                >
+                                    ✕
+                                </button>
+                            </span>
+                        ))}
+                        {selectedChars.length > 0 && (
+                            <button
+                                onClick={() => setSelectedChars([])}
+                                className="rounded-xl border px-2 py-1 text-xs transition"
+                                style={{ borderColor: "var(--border)" }}
+                            >
+                                Clear all
+                            </button>
+                        )}
+                    </div>
+                </div>
 
-                        <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                                {filteredChars.map((c) => (
-                                    <button
-                                        key={c.id}
-                                        onClick={() => openPickerFor(c)}
-                                        className="card flex flex-col items-center gap-2 transition hover:opacity-90"
-                                    >
-                                        <img
-                                            src={c.imageUrl}
-                                            alt={c.name}
-                                            className="w-16 h-16 rounded-full object-cover"
-                                        />
-                                        <div className="text-xs font-medium">
-                                            {c.name}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </details>
-
-                    {selectedChars.length === 0 ? (
-                        <div
-                            className="mt-6 text-sm"
+                <details className="card p-0 overflow-hidden" open>
+                    <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
+                        Character catalog{" "}
+                        <span
+                            className="text-xs"
                             style={{ color: "var(--text-muted)" }}
                         >
-                            Pick 1–3 characters and optionally weapons to see
-                            recommendations.
+                            ({filteredChars.length})
+                        </span>
+                    </summary>
+
+                    <div className="px-4 py-3 border-t border-app sticky top-0 bg-surface z-10">
+                        <input
+                            className="w-72 rounded-xl border px-3 py-2 text-sm outline-none"
+                            style={{
+                                borderColor: "var(--border)",
+                                background: "var(--surface)",
+                            }}
+                            placeholder="Search characters"
+                            value={charQ}
+                            onChange={(e) => setCharQ(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            {filteredChars.map((c) => (
+                                <button
+                                    key={c.id}
+                                    onClick={() => openPickerFor(c)}
+                                    className="card flex flex-col items-center gap-2 transition hover:opacity-90"
+                                >
+                                    <img
+                                        src={c.imageUrl}
+                                        alt={c.name}
+                                        className="w-16 h-16 rounded-full object-cover"
+                                    />
+                                    <div className="text-xs font-medium">
+                                        {c.name}
+                                    </div>
+                                </button>
+                            ))}
                         </div>
-                    ) : (
-                        <>
-                            <div
-                                className="text-sm mb-2"
-                                style={{ color: "var(--text-muted)" }}
-                            >
-                                Recommended comps based on{" "}
-                                {selectedChars.length} selected
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(() => {
-                                    const ids = selectedChars.map((c) => c.id);
-                                    const out: CompSuggestion[] = [];
-                                    const seen = new Set<string>();
-                                    const push = (comp: number[]) => {
-                                        const key = comp
-                                            .slice()
-                                            .sort((a, b) => a - b)
-                                            .join("-");
-                                        if (seen.has(key)) return;
-                                        seen.add(key);
-                                        const {
-                                            winRate,
-                                            pickRate,
-                                            mmrGain,
-                                            count,
-                                        } = compStats(comp);
-                                        out.push({
-                                            comp,
-                                            winRateEst: winRate,
-                                            pickRateEst: pickRate,
-                                            mmrGainEst: mmrGain,
-                                            support: {
-                                                fromPairs: 0.5,
-                                                fromSolo: 0.2,
-                                                fromCluster: 0.3,
-                                                modeled: true,
-                                            },
-                                            note: `samples: ${count}`,
-                                        });
-                                    };
-                                    if (ids.length >= 3) {
-                                        for (let i = 0; i < ids.length; i++)
+                    </div>
+                </details>
+
+                {selectedChars.length === 0 ? (
+                    <div
+                        className="mt-6 text-sm"
+                        style={{ color: "var(--text-muted)" }}
+                    >
+                        Pick 1–3 characters and optionally weapons to see
+                        recommendations.
+                    </div>
+                ) : (
+                    <>
+                        <div
+                            className="text-sm mb-2"
+                            style={{ color: "var(--text-muted)" }}
+                        >
+                            Recommended comps based on {selectedChars.length}{" "}
+                            selected
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {(() => {
+                                const ids = selectedChars.map((c) => c.id);
+                                const out: CompSuggestion[] = [];
+                                const seen = new Set<string>();
+                                const push = (comp: number[]) => {
+                                    const key = comp
+                                        .slice()
+                                        .sort((a, b) => a - b)
+                                        .join("-");
+                                    if (seen.has(key)) return;
+                                    seen.add(key);
+                                    const {
+                                        winRate,
+                                        pickRate,
+                                        mmrGain,
+                                        count,
+                                    } = compStats(comp);
+                                    out.push({
+                                        comp,
+                                        winRateEst: winRate,
+                                        pickRateEst: pickRate,
+                                        mmrGainEst: mmrGain,
+                                        support: {
+                                            fromPairs: 0.5,
+                                            fromSolo: 0.2,
+                                            fromCluster: 0.3,
+                                            modeled: true,
+                                        },
+                                        note: `samples: ${count}`,
+                                    });
+                                };
+                                if (ids.length >= 3) {
+                                    for (let i = 0; i < ids.length; i++)
+                                        for (let j = i + 1; j < ids.length; j++)
                                             for (
-                                                let j = i + 1;
-                                                j < ids.length;
-                                                j++
+                                                let k = j + 1;
+                                                k < ids.length;
+                                                k++
                                             )
-                                                for (
-                                                    let k = j + 1;
-                                                    k < ids.length;
-                                                    k++
-                                                )
-                                                    push([
-                                                        ids[i],
-                                                        ids[j],
-                                                        ids[k],
-                                                    ]);
-                                    }
-                                    const score = (c: CompSuggestion) =>
-                                        c.winRateEst * 1.2 +
-                                        c.mmrGainEst / 15 +
-                                        c.pickRateEst * 0.6;
-                                    return out
-                                        .sort((a, b) => score(b) - score(a))
-                                        .slice(0, 8)
-                                        .map((s, i) => (
-                                            <CompSuggestionCard
-                                                key={i}
-                                                s={s}
-                                                nameById={(id) =>
-                                                    characters.find(
-                                                        (x) => x.id === id,
-                                                    )?.name || `ID ${id}`
-                                                }
-                                            />
-                                        ));
-                                })()}
-                            </div>
-                        </>
-                    )}
-                </section>
-            )}
+                                                push([ids[i], ids[j], ids[k]]);
+                                }
+                                const score = (c: CompSuggestion) =>
+                                    c.winRateEst * 1.2 +
+                                    c.mmrGainEst / 15 +
+                                    c.pickRateEst * 0.6;
+                                return out
+                                    .sort((a, b) => score(b) - score(a))
+                                    .slice(0, 8)
+                                    .map((s, i) => (
+                                        <CompSuggestionCard
+                                            key={i}
+                                            s={s}
+                                            nameById={(id) =>
+                                                characters.find(
+                                                    (x) => x.id === id,
+                                                )?.name || `ID ${id}`
+                                            }
+                                        />
+                                    ));
+                            })()}
+                        </div>
+                    </>
+                )}
+            </section>
 
             {/* Character 탭용 무기 선택 모달 */}
             <CharacterWeaponPicker

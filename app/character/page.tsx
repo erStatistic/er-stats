@@ -5,9 +5,35 @@ import { mulberry32 } from "@/lib/rng";
 import { serverListCharacters } from "@/lib/api"; // DB 목록 호출 유틸
 
 export default async function CharacterStatPage() {
-    // 표/통계는 기존 mock 유지
-    const rng = mulberry32(12345);
-    const rows = makeMock(36, rng);
+    // ✅ mock → 실제 DB 통계 (이름 포함 응답 사용)
+    const API = process.env.API_BASE_URL;
+
+    const stats = await fetch(
+        `${API}/api/v1/analytics/cw/stats?minSamples=50`,
+        { cache: "no-store", headers: { accept: "application/json" } },
+    )
+        .then((r) => r.json())
+        .then((j) => j.data ?? j);
+
+    console.log(stats);
+
+    const rows = (stats as any[]).map((s: any) => ({
+        // CharacterClient가 쓰는 필드에 맞춰 매핑
+        tier:
+            s.win_rate >= 0.58
+                ? "A"
+                : s.win_rate >= 0.52
+                  ? "B"
+                  : s.win_rate >= 0.48
+                    ? "C"
+                    : "D",
+        name: s.character_name_kr ?? s.character_name ?? `#${s.cw_id}`,
+        weapon: s.weapon_name_kr ?? s.weapon_name ?? "",
+        winRate: s.win_rate,
+        pickRate: s.pick_rate,
+        mmrGain: s.avg_mmr, // ← gained_mmr 평균
+        survivalTime: s.avg_survival ?? undefined,
+    }));
 
     // DB 캐릭터 목록 (아이콘 격자용)
     let dbChars: Array<{

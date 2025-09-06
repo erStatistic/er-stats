@@ -137,86 +137,87 @@ export default function ClusterCompsClient({
                 </select>
             </div>
 
-            {/* 리스트 테이블 — 필터/정렬 반영 */}
-            <div className="card p-0 overflow-hidden">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-muted">
-                        <tr className="text-muted-app">
-                            <th className="px-3 py-2 text-left font-medium">
-                                조합(Clusters)
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                                승률
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                                픽률
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                                평균 MMR
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                                평균 생존시간
-                            </th>
-                            {/* ✅ 항상 표시 */}
-                            <th className="px-3 py-2 text-right font-medium">
-                                게임 수
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sorted.map((s, i) => (
-                            <tr
-                                key={i}
-                                className="border-t border-app hover:bg-elev-5 transition-colors"
-                            >
-                                <td className="px-3 py-2">
-                                    <span className="inline-flex gap-1">
-                                        {s.clusters.map((c, j) => (
-                                            <span
-                                                key={`${c}-${j}`}
-                                                className="inline-block"
-                                            >
-                                                <strong className="text-app">
-                                                    {c}
-                                                </strong>
-                                                {j < 2 ? " · " : ""}
-                                            </span>
-                                        ))}
-                                    </span>
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                    {(s.winRate * 100).toFixed(1)}%
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                    {(s.pickRate * 100).toFixed(2)}%
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                    {s.mmrGain.toFixed(1)}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                    {s.survivalTime == null
-                                        ? "—"
-                                        : formatDuration(
-                                              Math.round(s.survivalTime),
-                                          )}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                    {s.count.toLocaleString()}
-                                </td>
+            <div className="card p-0">
+                {/* ✅ 스크롤 컨테이너: 세로/가로 스크롤 */}
+                <div className="max-h-[60vh] overflow-auto overflow-x-auto">
+                    <table className="min-w-[720px] w-full text-sm">
+                        <thead className="bg-muted sticky top-0 z-10">
+                            <tr className="text-muted-app">
+                                <th className="px-3 py-2 text-left font-medium">
+                                    조합(Clusters)
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                    승률
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                    픽률
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                    평균 MMR
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                    평균 생존시간
+                                </th>
+                                <th className="px-3 py-2 text-right font-medium">
+                                    게임 수
+                                </th>
                             </tr>
-                        ))}
-                        {sorted.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={6}
-                                    className="px-3 py-6 text-center text-muted-app"
+                        </thead>
+                        <tbody>
+                            {sorted.map((s, i) => (
+                                <tr
+                                    key={i}
+                                    className="border-t border-app hover:bg-elev-5 transition-colors"
                                 >
-                                    표시할 조합이 없습니다.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                                    <td className="px-3 py-2">
+                                        <span className="inline-flex gap-1">
+                                            {s.clusters.map((c, j) => (
+                                                <span
+                                                    key={`${c}-${j}`}
+                                                    className="inline-block"
+                                                >
+                                                    <strong className="text-app">
+                                                        {c}
+                                                    </strong>
+                                                    {j < 2 ? " · " : ""}
+                                                </span>
+                                            ))}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {(s.winRate * 100).toFixed(1)}%
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {(s.pickRate * 100).toFixed(2)}%
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {s.mmrGain.toFixed(1)}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {s.survivalTime == null
+                                            ? "—"
+                                            : formatDuration(
+                                                  Math.round(s.survivalTime),
+                                              )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                        {s.count.toLocaleString()}
+                                    </td>
+                                </tr>
+                            ))}
+                            {sorted.length === 0 && (
+                                <tr>
+                                    <td
+                                        colSpan={6}
+                                        className="px-3 py-6 text-center text-muted-app"
+                                    >
+                                        표시할 조합이 없습니다.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

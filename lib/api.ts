@@ -93,3 +93,53 @@ export async function serverListCharacters(): Promise<DbCharacterLite[]> {
         role: d.Role ?? d.role ?? null,
     }));
 }
+
+type ServerClusterComboRow = {
+    cluster_label: string; // "A · B · K"
+    samples: number;
+    wins: number;
+    win_rate: number;
+    pick_rate: number;
+    avg_mmr: number;
+    avg_survival: number;
+};
+
+export type ClusterTriadSummary = {
+    clusters: string[]; // ["A","B","K"]
+    winRate: number; // 0~1
+    pickRate: number; // 0~1
+    mmrGain: number;
+    survivalTime?: number; // 초
+    count: number;
+    patch?: "All";
+    tier?: "All" | string; // tiers.name
+};
+
+export async function fetchClusterCombos({
+    tier = "All",
+    limit = 500,
+    offset = 0,
+} = {}) {
+    const url = new URL(`${process.env.API_BASE_URL!}/api/v1/combos/clusters`);
+    if (tier !== "All") url.searchParams.set("tier", tier);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
+
+    const res = await fetch(url.toString(), {
+        cache: "no-store",
+        headers: { accept: "application/json" },
+    });
+    const j = await res.json();
+    const rows = (j.data ?? j) as ServerClusterComboRow[];
+
+    return rows.map((r) => ({
+        clusters: r.cluster_label.split("·").map((s) => s.trim()),
+        winRate: r.win_rate,
+        pickRate: r.pick_rate,
+        mmrGain: r.avg_mmr,
+        survivalTime: r.avg_survival,
+        count: r.samples,
+        patch: "All",
+        tier,
+    })) as ClusterTriadSummary[];
+}

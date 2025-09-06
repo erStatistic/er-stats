@@ -114,21 +114,36 @@ export default function CharacterTable({
                 </thead>
 
                 <tbody className="bg-surface">
-                    {sorted.map((r) => {
+                    {sorted.map((r, i) => {
+                        // ✅ key & select용 id 안전 처리
+                        const cwId = (r as any).cwId; // 있으면 사용
+                        const rowId =
+                            typeof r.id === "number"
+                                ? r.id
+                                : typeof cwId === "number"
+                                  ? cwId
+                                  : undefined;
+
+                        const key = rowId ?? `${r.name}-${r.weapon}-${i}`;
                         const sec = parseDurationToSec(r.survivalTime as any);
+
                         return (
                             <tr
-                                key={r.id}
+                                key={key}
                                 className="border-t border-app hover:bg-elev-10 cursor-pointer"
-                                onClick={() => onSelect(r.id)}
+                                onClick={() => {
+                                    if (typeof rowId === "number")
+                                        onSelect(rowId);
+                                }}
                             >
                                 {/* 티어(+허니) */}
                                 <td className="whitespace-nowrap px-3 py-2">
                                     <div className="flex items-center gap-1">
                                         <TierPill tier={r.tier} />
-                                        {honeySet.has(r.id) && (
-                                            <HoneyBadge title="상위 10% (대표무기 기준)" />
-                                        )}
+                                        {typeof rowId === "number" &&
+                                            honeySet.has(rowId) && (
+                                                <HoneyBadge title="상위 10% (대표무기 기준)" />
+                                            )}
                                     </div>
                                 </td>
 
