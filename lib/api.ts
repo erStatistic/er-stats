@@ -83,7 +83,6 @@ export async function serverListCharacters(): Promise<DbCharacterLite[]> {
     const body = await res.json();
     const rows = body?.data ?? body;
 
-    console.log(rows);
     // 대→소문자 정규화
     return (rows as any[]).map((d) => ({
         id: Number(d.ID ?? d.id),

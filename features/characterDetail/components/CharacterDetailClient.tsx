@@ -1,7 +1,6 @@
-// features/characterDetail/components/CharacterDetailClient.tsx
 "use client";
 import { Copy, Check } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import TierPill from "@/features/ui/TierPill";
 import VariantPill from "@/features/ui/VariantPill";
@@ -33,6 +32,8 @@ type OverviewBox = {
         survivalSec?: number;
     };
     stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
+    // 선택: routes 등 추가 필드가 있을 수 있음
+    routes?: Array<{ id: number; title?: string }>;
 };
 
 type CwOverview =
@@ -98,7 +99,6 @@ export default function CharacterDetailClient({
         return arr;
     }, [variants]);
 
-    // 선택값: 서버가 정해준 currentWeapon을 신뢰
     const [selectedWeapon, setSelectedWeapon] = useState(
         currentWeapon ?? sortedVariants[0]?.weapon ?? "",
     );
@@ -109,21 +109,51 @@ export default function CharacterDetailClient({
         initTeams ?? mockTeamsFor(displayId, selectedWeapon),
     );
 
-    // 🔁 서버가 새 props(currentWeapon/overview)를 주면 동기화
+    // 의존성 안정화를 위한 키
+    const variantsKey = useMemo(
+        () =>
+            sortedVariants
+                .map(
+                    (v) =>
+                        `${v.weaponCode ?? ""}:${v.cwId ?? ""}:${v.weapon ?? ""}`,
+                )
+                .join("|"),
+        [sortedVariants],
+    );
+
+    // 서버 값이 바뀐 경우에만 동기화 (사용자 pill 클릭을 덮어쓰지 않도록)
+    const lastServerWeaponRef = useRef<string | undefined>(currentWeapon);
+    const lastDisplayIdRef = useRef<number | undefined>(displayId);
+
     useEffect(() => {
-        const next = currentWeapon ?? sortedVariants[0]?.weapon ?? "";
-        setSelectedWeapon(next);
-        setBuilds(mockBuildsFor(displayId, next));
-        setTeams(mockTeamsFor(displayId, next));
-    }, [currentWeapon, sortedVariants, displayId]);
+        const serverChanged = currentWeapon !== lastServerWeaponRef.current;
+        const idChanged = lastDisplayIdRef.current !== displayId;
+
+        if (serverChanged) lastServerWeaponRef.current = currentWeapon;
+        if (idChanged) lastDisplayIdRef.current = displayId;
+
+        if (serverChanged || idChanged) {
+            const first = sortedVariants[0]?.weapon ?? "";
+            const next = currentWeapon ?? first;
+
+            if (next && next !== selectedWeapon) {
+                setSelectedWeapon(next);
+                setBuilds(mockBuildsFor(displayId, next));
+                setTeams(mockTeamsFor(displayId, next));
+            } else if (!next && !selectedWeapon && first) {
+                setSelectedWeapon(first);
+                setBuilds(mockBuildsFor(displayId, first));
+                setTeams(mockTeamsFor(displayId, first));
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentWeapon, variantsKey, displayId]);
 
     // overview 중첩/평탄 통합
     const ov: OverviewBox | undefined = useMemo(() => {
         if (!overview) return undefined;
         const any = overview as any;
-        return any.overview
-            ? any.overview
-            : { summary: any.summary, stats: any.stats };
+        return any.overview ? any.overview : { ...any };
     }, [overview]);
 
     // 지표
@@ -154,6 +184,7 @@ export default function CharacterDetailClient({
     }, [ov?.stats]);
 
     // 추세(데모)
+    const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
     const winData = useMemo(
         () => makeTrendSeriesPct(winRate ?? 0.5, `${selectedWeapon}-win`),
         [winRate, selectedWeapon],
@@ -162,17 +193,19 @@ export default function CharacterDetailClient({
         () => makeTrendSeriesPct(pickRate ?? 0.035, `${selectedWeapon}-pick`),
         [pickRate, selectedWeapon],
     );
-    const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
 
-    // ✅ pill 클릭: URL wc 갱신 + 서버 데이터 강제 새로고침
+    // ✅ pill 클릭: wc=weaponId(=weaponCode)로 라우팅
     function goWeapon(v: VariantItem) {
-        setSelectedWeapon(v.weapon); // 즉시 UI 표시
+        setSelectedWeapon(v.weapon); // 즉시 UI 반영
         setBuilds(mockBuildsFor(displayId, v.weapon));
         setTeams(mockTeamsFor(displayId, v.weapon));
-        router.replace(`/characters/${displayId}?wc=${v.cwId}`, {
-            scroll: false,
-        });
-        router.refresh(); // ← 서버가 새 overview를 fetch하도록 보장
+
+        const code = Number.isFinite(v.weaponCode as number)
+            ? Number(v.weaponCode)
+            : undefined;
+        const qs = code != null ? `?wc=${code}` : "";
+        router.replace(`/characters/${displayId}${qs}`, { scroll: false });
+        router.refresh(); // 서버에서 overview/currentWeapon을 갱신하도록
     }
 
     const positionName =
@@ -180,7 +213,6 @@ export default function CharacterDetailClient({
         (character as any)?.position?.name ??
         "";
 
-    // 클러스터 배열 (예: ["A","B","K"])
     const clusters: string[] = useMemo(() => {
         const c =
             (character as any)?.clusters ??
@@ -189,6 +221,7 @@ export default function CharacterDetailClient({
             [];
         return Array.isArray(c) ? [...c].sort() : [];
     }, [character, overview, r]);
+
     const keyFor = (v: VariantItem, i: number) =>
         Number.isFinite(v.cwId)
             ? `cw-${v.cwId}`
@@ -197,6 +230,7 @@ export default function CharacterDetailClient({
               : `idx-${i}`;
 
     const [copied, setCopied] = useState<number | null>(null);
+
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
@@ -231,6 +265,7 @@ export default function CharacterDetailClient({
                         )}
                     </div>
                 </div>
+
                 {(positionName || clusters.length > 0) && (
                     <div className="flex items-center gap-2 overflow-x-auto shrink-0">
                         {clusters.map((c) => (
@@ -252,7 +287,6 @@ export default function CharacterDetailClient({
                         <KpiCard
                             label="승률"
                             value={formatPercent(winRate ?? 0)}
-                            // sub="#— / —"  // 랭킹 같은 부라벨을 보여주고 싶으면 여기에
                         />
                         <KpiCard
                             label="픽률"
@@ -337,57 +371,10 @@ export default function CharacterDetailClient({
             <section className="mb-6">
                 <h2 className="text-lg font-semibold mb-2">추천 빌드</h2>
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
-                    {overview?.overview?.routes?.map((b) => (
+                    {ov?.routes?.map((b) => (
                         <div key={b.id} className="card p-4 relative">
                             {/* 우측 상단: 복사 아이콘 버튼 */}
-                            <button
-                                type="button"
-                                className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md border border-app/40 bg-elev-5 hover:bg-elev-10 text-muted-app hover:text-app transition focus:outline-none focus:ring-2 focus:ring-app/40"
-                                aria-label={`루트 ID ${b.id} 복사`}
-                                title={copied === b.id ? "복사됨!" : "복사"}
-                                onClick={async (e) => {
-                                    e.preventDefault();
-                                    const text = String(b.id);
-                                    try {
-                                        if (
-                                            navigator.clipboard &&
-                                            window.isSecureContext
-                                        ) {
-                                            await navigator.clipboard.writeText(
-                                                text,
-                                            );
-                                        } else {
-                                            const ta =
-                                                document.createElement(
-                                                    "textarea",
-                                                );
-                                            ta.value = text;
-                                            ta.style.position = "fixed";
-                                            ta.style.left = "-9999px";
-                                            document.body.appendChild(ta);
-                                            ta.select();
-                                            document.execCommand("copy");
-                                            document.body.removeChild(ta);
-                                        }
-                                        setCopied(b.id);
-                                        setTimeout(() => {
-                                            setCopied((cur) =>
-                                                cur === b.id ? null : cur,
-                                            );
-                                        }, 1200);
-                                    } catch (err) {
-                                        console.error("Copy failed:", err);
-                                    }
-                                }}
-                            >
-                                {copied === b.id ? (
-                                    <Check size={16} aria-hidden />
-                                ) : (
-                                    <Copy size={16} aria-hidden />
-                                )}
-                                <span className="sr-only">복사</span>
-                            </button>
-
+                            <CopyButton id={b.id} />
                             <div className="font-medium text-app">
                                 루트 번호: {b.id}
                             </div>
@@ -398,6 +385,7 @@ export default function CharacterDetailClient({
                     ))}
                 </div>
             </section>
+
             {/* 추천 팀 조합 */}
             <section>
                 <h2 className="text-lg font-semibold mb-2">추천 팀 조합</h2>
@@ -425,5 +413,47 @@ export default function CharacterDetailClient({
                 </div>
             </section>
         </div>
+    );
+}
+
+// 작은 복사 버튼 분리
+function CopyButton({ id }: { id: number }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <button
+            type="button"
+            className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md border border-app/40 bg-elev-5 hover:bg-elev-10 text-muted-app hover:text-app transition focus:outline-none focus:ring-2 focus:ring-app/40"
+            aria-label={`루트 ID ${id} 복사`}
+            title={copied ? "복사됨!" : "복사"}
+            onClick={async (e) => {
+                e.preventDefault();
+                const text = String(id);
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(text);
+                    } else {
+                        const ta = document.createElement("textarea");
+                        ta.value = text;
+                        ta.style.position = "fixed";
+                        ta.style.left = "-9999px";
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(ta);
+                    }
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1200);
+                } catch (err) {
+                    console.error("Copy failed:", err);
+                }
+            }}
+        >
+            {copied ? (
+                <Check size={16} aria-hidden />
+            ) : (
+                <Copy size={16} aria-hidden />
+            )}
+            <span className="sr-only">복사</span>
+        </button>
     );
 }

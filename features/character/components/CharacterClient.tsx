@@ -1,4 +1,3 @@
-// features/character/components/CharacterClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -29,26 +28,84 @@ export default function CharacterClient({
     const [honeyOnly, setHoneyOnly] = useState(false);
 
     const router = useRouter();
-    const goDetail = (id: number) => router.push(`/characters/${id}`);
+    const goDetail = (char_id: number, weapon_id: number) =>
+        router.push(`/characters/${char_id}?wc=${weapon_id}`);
 
-    // (추후 서버 패치 데이터로 교체 가능)
+    // 🔠 한글 초성 검색 유틸
+    const norm = (s: string) => s.normalize("NFC").toLowerCase().trim();
+    const collapse = (s: string) => norm(s).replace(/\s+/g, "");
+    const CHO = [
+        "ㄱ",
+        "ㄲ",
+        "ㄴ",
+        "ㄷ",
+        "ㄸ",
+        "ㄹ",
+        "ㅁ",
+        "ㅂ",
+        "ㅃ",
+        "ㅅ",
+        "ㅆ",
+        "ㅇ",
+        "ㅈ",
+        "ㅉ",
+        "ㅊ",
+        "ㅋ",
+        "ㅌ",
+        "ㅍ",
+        "ㅎ",
+    ];
+    const toInitials = (s: string) => {
+        const base = 0xac00,
+            choUnit = 21 * 28;
+        let out = "";
+        for (const ch of s) {
+            const code = ch.charCodeAt(0);
+            if (code >= 0xac00 && code <= 0xd7a3) {
+                const idx = Math.floor((code - base) / choUnit);
+                out += CHO[idx] ?? ch;
+            } else out += ch;
+        }
+        return out;
+    };
+
     const patchedRows = useMemo(() => initialRows, [initialRows, patch]);
 
-    // 검색 + (단일) 게임티어 탭 필터
+    // 🔍 이름/무기명 부분일치 + 초성일치, 그리고 티어 필터
     const filtered = useMemo(() => {
-        const qq = q.trim().toLowerCase();
-        return patchedRows.filter((r) => {
-            const okQ = !qq || r.name.toLowerCase().includes(qq);
+        const raw = q.trim();
+        const passTier = (r: CharacterSummary) => {
             const tierOfRow = getRankTier(r);
-            const okTier = gameTier === "All" || tierOfRow === gameTier;
-            return okQ && okTier;
+            return gameTier === "All" || tierOfRow === gameTier;
+        };
+
+        if (!raw) return patchedRows.filter(passTier);
+
+        const q1 = collapse(raw);
+        const q2 = collapse(toInitials(raw));
+
+        return patchedRows.filter((r) => {
+            if (!passTier(r)) return false;
+
+            const name = r.name ?? "";
+            const weapon = r.weapon ?? "";
+
+            const n1 = collapse(name);
+            const n2 = collapse(toInitials(name));
+            const w1 = collapse(weapon);
+            const w2 = collapse(toInitials(weapon));
+
+            const okQ =
+                n1.includes(q1) ||
+                (q2 && n2.includes(q2)) ||
+                w1.includes(q1) ||
+                (q2 && w2.includes(q2));
+            return okQ;
         });
     }, [q, gameTier, patchedRows]);
 
-    // 허니셋: 필터된 목록에서 산출 (표와 뱃지 일관)
     const honey = useMemo(() => computeHoneySet(filtered, 3), [filtered]);
 
-    // 허니 전용 보기 적용
     const visibleRows = useMemo(
         () =>
             honeyOnly ? filtered.filter((r) => honey.ids.has(r.id)) : filtered,
@@ -59,18 +116,17 @@ export default function CharacterClient({
         <main className="mx-auto max-w-5xl flex flex-col gap-4 pb-20">
             {/* ① 캐릭터 선택 박스 (DB 데이터) */}
             <CharacterPicker chars={dbChars} />
+
             {/* ② 통계(테이블) 박스 */}
             <section className="card ">
                 <div className="mb-3 px-4 pt-4 flex flex-wrap items-center gap-2">
-                    {/* 검색(표 전용) */}
                     <input
                         className="w-56 rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-app text-app"
-                        placeholder="실험체 검색 (표)"
+                        placeholder="실험체 검색 (이름/초성)"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                     />
 
-                    {/* 패치 선택 */}
                     <select
                         className="rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none text-app"
                         value={patch}
@@ -84,14 +140,12 @@ export default function CharacterClient({
                         ))}
                     </select>
 
-                    {/* 게임 티어 탭 (단일 선택) */}
                     <CharacterTabs
                         value={gameTier}
                         onChange={(v) => setGameTier(v)}
                         items={GAME_TIERS}
                     />
 
-                    {/* 허니 배지 필터 */}
                     <button
                         type="button"
                         onClick={() => setHoneyOnly((prev) => !prev)}
@@ -108,11 +162,10 @@ export default function CharacterClient({
                     </button>
                 </div>
 
-                {/* 표: 행 클릭 시 상세로 이동 */}
                 <CharacterTable
                     rows={visibleRows}
                     honeyIds={honey.ids}
-                    onSelect={(id) => goDetail(id)}
+                    onSelect={goDetail}
                 />
             </section>
         </main>

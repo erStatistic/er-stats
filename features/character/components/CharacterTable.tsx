@@ -1,4 +1,5 @@
 "use client";
+
 import { useMemo, useState } from "react";
 import { CharacterSummary, SortDir, SortKey } from "@/types";
 import {
@@ -13,13 +14,19 @@ import {
 import TierPill from "@/features/ui/TierPill";
 import HoneyBadge from "@/features/ui/HoneyBadge";
 
+type RowLike = CharacterSummary & {
+    characterId?: number; // 서버 매핑 필드
+    weaponId?: number; // 서버 매핑 필드
+    cwId?: number; // (있으면 사용)
+};
+
 export default function CharacterTable({
     rows,
     onSelect,
     honeyIds,
 }: {
     rows: CharacterSummary[];
-    onSelect: (id: number) => void;
+    onSelect: (char_id: number, weapon_id: number) => void;
     honeyIds?: number[] | Set<number>;
 }) {
     const [sortKey, setSortKey] = useState<SortKey>("tier");
@@ -115,16 +122,10 @@ export default function CharacterTable({
 
                 <tbody className="bg-surface">
                     {sorted.map((r, i) => {
-                        // ✅ key & select용 id 안전 처리
-                        const cwId = (r as any).cwId; // 있으면 사용
-                        const rowId =
-                            typeof r.id === "number"
-                                ? r.id
-                                : typeof cwId === "number"
-                                  ? cwId
-                                  : undefined;
-
-                        const key = rowId ?? `${r.name}-${r.weapon}-${i}`;
+                        const row = r as RowLike;
+                        const charId = row.characterId ?? r.id; // fallback
+                        const weaponId = row.weaponId;
+                        const key = `${charId}-${weaponId ?? r.weapon}-${i}`;
                         const sec = parseDurationToSec(r.survivalTime as any);
 
                         return (
@@ -132,18 +133,25 @@ export default function CharacterTable({
                                 key={key}
                                 className="border-t border-app hover:bg-elev-10 cursor-pointer"
                                 onClick={() => {
-                                    if (typeof rowId === "number")
-                                        onSelect(rowId);
+                                    if (
+                                        Number.isFinite(charId) &&
+                                        Number.isFinite(weaponId as number)
+                                    ) {
+                                        onSelect(
+                                            charId as number,
+                                            weaponId as number,
+                                        );
+                                    }
                                 }}
                             >
                                 {/* 티어(+허니) */}
                                 <td className="whitespace-nowrap px-3 py-2">
                                     <div className="flex items-center gap-1">
                                         <TierPill tier={r.tier} />
-                                        {typeof rowId === "number" &&
-                                            honeySet.has(rowId) && (
-                                                <HoneyBadge title="상위 10% (대표무기 기준)" />
-                                            )}
+                                        {(honeySet.has(charId) ||
+                                            honeySet.has(r.id)) && (
+                                            <HoneyBadge title="상위 10% (대표무기 기준)" />
+                                        )}
                                     </div>
                                 </td>
 
@@ -163,7 +171,6 @@ export default function CharacterTable({
                                     {formatMMR(r.mmrGain, 1)}
                                 </td>
 
-                                {/* ✅ 평균 생존시간 */}
                                 {hasSurvival && (
                                     <td className="whitespace-nowrap px-3 py-2">
                                         {sec == null

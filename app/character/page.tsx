@@ -15,10 +15,7 @@ export default async function CharacterStatPage() {
         .then((r) => r.json())
         .then((j) => j.data ?? j);
 
-    console.log(stats);
-
     const rows = (stats as any[]).map((s: any) => ({
-        // CharacterClient가 쓰는 필드에 맞춰 매핑
         tier:
             s.win_rate >= 0.58
                 ? "A"
@@ -27,8 +24,10 @@ export default async function CharacterStatPage() {
                   : s.win_rate >= 0.48
                     ? "C"
                     : "D",
-        name: s.character_name_kr ?? s.character_name ?? `#${s.cw_id}`,
-        weapon: s.weapon_name_kr ?? s.weapon_name ?? "",
+        characterId: s.character_id,
+        weaponId: s.weapon_id,
+        name: s.character_name_kr,
+        weapon: s.weapon_name_kr,
         winRate: s.win_rate,
         pickRate: s.pick_rate,
         mmrGain: s.avg_mmr, // ← gained_mmr 평균
