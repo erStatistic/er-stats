@@ -157,6 +157,7 @@ export default function CharacterDetailClient({
     }, [overview]);
 
     // 지표
+
     const winRate = ov?.summary?.winRate ?? 0;
     const pickRate = ov?.summary?.pickRate ?? 0;
     const mmrGain = ov?.summary?.mmrGain ?? 0;

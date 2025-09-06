@@ -5,9 +5,7 @@ import { CompSuggestion, UserProfile } from "@/types";
 import CompSuggestionCard from "./CompSuggestionCard";
 import { toast } from "sonner";
 import CharacterWeaponPicker, { CharItem } from "./CharacterWeaponPicker";
-import SegmentedTabs, { SegTab } from "./SegmentedTabs";
-import UserAddForm from "./UserAddForm";
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import AddedUsersList from "./AddedUsersList";
 
 /* ============== API 유틸 ============== */
@@ -23,7 +21,41 @@ async function fetchJSON<T>(path: string): Promise<T> {
     return (j?.data ?? j) as T;
 }
 
-/* ============== 데모 점수 ============== */
+/** 선택된 cw 3개로 조합 지표 조회(서버의 GetCompMetricsBySelectedCWs) */
+type CompMetricResp = {
+    samples: number;
+    wins: number;
+    win_rate: number;
+    pick_rate: number;
+    avg_mmr: number;
+    avg_survival: number;
+};
+async function fetchCompMetrics(
+    cwIds: number[],
+    opts?: { start?: string; end?: string; tier?: string; minSamples?: number },
+): Promise<CompMetricResp | null> {
+    const body = JSON.stringify({
+        cw: cwIds, // ← 필수: [cwId, cwId, cwId]
+        start: opts?.start ?? null,
+        end: opts?.end ?? null,
+        tier: opts?.tier ?? "",
+        minSamples: opts?.minSamples ?? 50,
+    });
+    const res = await fetch(`${API_BASE}/analytics/comp/metrics`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+            accept: "application/json",
+        },
+        cache: "no-store",
+        body,
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return (j?.data ?? j) as CompMetricResp;
+}
+
+/* ============== 데모 점수(기존) ============== */
 function hash(s: string) {
     let h = 0;
     for (let i = 0; i < s.length; i++) {
@@ -49,111 +81,15 @@ function compStats(comp: number[]) {
     };
 }
 
-/* ============== 기존(참고) ============== */
-function suggestionsFromUsersTopWithPool(
-    users: UserProfile[],
-    poolIds: number[],
-    topK = 8,
-): CompSuggestion[] {
-    const lists = users
-        .map((u) =>
-            Array.from(new Set(u.topChars.map((t) => t.id))).slice(0, 3),
-        )
-        .filter((arr) => arr.length > 0);
-    if (lists.length === 0) return [];
-
-    const POOL = Array.from(new Set(poolIds));
-    const seen = new Set<string>();
-    const out: CompSuggestion[] = [];
-    const MAX_GEN = topK * 40;
-
-    const pushComp = (comp: number[], modeled: boolean) => {
-        const key = comp
-            .slice()
-            .sort((a, b) => a - b)
-            .join("-");
-        if (seen.has(key)) return;
-        seen.add(key);
-        const { winRate, pickRate, mmrGain, count } = compStats(comp);
-        out.push({
-            comp,
-            winRateEst: winRate,
-            pickRateEst: pickRate,
-            mmrGainEst: mmrGain,
-            support: modeled
-                ? {
-                      fromPairs: 0.4,
-                      fromSolo: 0.25,
-                      fromCluster: 0.35,
-                      modeled: true,
-                  }
-                : {
-                      fromPairs: 0.33,
-                      fromSolo: 0.33,
-                      fromCluster: 0.34,
-                      modeled: false,
-                  },
-            note: `samples: ${count}`,
-        });
-    };
-
-    if (lists.length >= 3) {
-        const [A, B, C] = lists;
-        outer3: for (const a of A)
-            for (const b of B)
-                for (const c of C) {
-                    if (a === b || b === c || a === c) continue;
-                    pushComp([a, b, c], false);
-                    if (out.length >= MAX_GEN) break outer3;
-                }
-    } else if (lists.length === 2) {
-        const [A, B] = lists;
-        outer2: for (const a of A)
-            for (const b of B) {
-                if (a === b) continue;
-                for (const c of POOL) {
-                    if (c === a || c === b) continue;
-                    pushComp([a, b, c], true);
-                    if (out.length >= MAX_GEN) break outer2;
-                }
-            }
-    } else {
-        const A = lists[0];
-        outer1: for (const a of A) {
-            for (let i = 0; i < POOL.length; i++) {
-                const b = POOL[i];
-                if (b === a) continue;
-                for (let j = i + 1; j < POOL.length; j++) {
-                    const c = POOL[j];
-                    if (c === a || c === b) continue;
-                    pushComp([a, b, c], true);
-                    if (out.length >= MAX_GEN) break outer1;
-                }
-            }
-        }
-    }
-
-    const score = (c: CompSuggestion) =>
-        c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
-    return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
-}
-
-/* ============== 신규: 선택 CW 기반 + 부족분 풀 보완 ============== */
+/* ============== 신규: 선택 CW 기반 + 부족분 풀 보완(유저 탭에서 사용) ============== */
 type UserPick = {
-    id: number; // character id
+    id: number;
     name: string;
     imageUrl: string;
-    cwId: number; // character-weapon id
+    cwId: number;
     weapon: string;
 };
 type PicksByUser = Record<string, UserPick[]>;
-
-/** 유저별로 최소 1개 이상 선택되었을 때:
- * - 3명: 각 유저 선택들 간 교차곱(같은 캐릭 중복 금지)
- * - 2명: 두 유저 선택 + 풀에서 보완 1명(캐릭 id 기준 중복 금지)
- * - 1명: 한 유저 선택 + 풀에서 보완 2명(캐릭 id 기준 중복 금지)
- * comp 배열은 [cwId | charId] 혼합 허용(라벨러가 구분)
- */
 function suggestFromUserCwWithPool(
     picksByUserTop3: PicksByUser,
     allCharIds: number[],
@@ -165,9 +101,6 @@ function suggestFromUserCwWithPool(
 
     const seen = new Set<string>();
     const out: CompSuggestion[] = [];
-    const score = (c: CompSuggestion) =>
-        c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
-
     const push = (comp: number[]) => {
         const key = comp
             .slice()
@@ -197,7 +130,7 @@ function suggestFromUserCwWithPool(
             for (const b of B)
                 for (const c of C) {
                     const chars = new Set([a.id, b.id, c.id]);
-                    if (chars.size !== 3) continue; // 캐릭 중복 금지
+                    if (chars.size !== 3) continue;
                     push([a.cwId, b.cwId, c.cwId]);
                 }
     } else if (n === 2) {
@@ -210,7 +143,7 @@ function suggestFromUserCwWithPool(
                     push([a.cwId, b.cwId, x]); // x는 캐릭 id(무기 미지정)
                 }
             }
-    } else if (n === 1) {
+    } else {
         const [A] = sets;
         for (const a of A) {
             for (let i = 0; i < allCharIds.length; i++) {
@@ -219,57 +152,36 @@ function suggestFromUserCwWithPool(
                 for (let j = i + 1; j < allCharIds.length; j++) {
                     const c = allCharIds[j];
                     if (c === a.id || c === b) continue;
-                    push([a.cwId, b, c]); // b,c는 캐릭 id
+                    push([a.cwId, b, c]);
                 }
             }
         }
     }
-
+    const score = (c: CompSuggestion) =>
+        c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
     return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
 }
 
 /* ============== 타입 ============== */
-type Tab = "user" | "character";
 type SelectedChar = {
     id: number;
     name: string;
     imageUrl: string;
     weapon?: string;
+    /** ✅ 반드시 포함: 선택된 무기 cwId */
+    cwId?: number;
 };
-
-type CwLite = {
-    cwId: number;
-    weapon: string;
-    weaponCode?: number;
-    weaponImageUrl?: string;
-};
-
-const TABS: SegTab[] = [
-    // { value: "user", label: "By User" },
-    { value: "character", label: "By Character" },
-];
 
 export default function UserMultiSuggestClient() {
-    const [tab, setTab] = useState<Tab>("user");
-
-    // 유저
-    const [input, setInput] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [users, setUsers] = useState<UserProfile[]>([]);
-
     // 전체 캐릭(추천 풀)
     const [characters, setCharacters] = useState<CharItem[]>([]);
-
     // Character 탭용
     const [charQ, setCharQ] = useState("");
     const [selectedChars, setSelectedChars] = useState<SelectedChar[]>([]);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState<CharItem | null>(null);
 
-    // ✅ 유저별 선택 무기(컨트롤드, 리셋 방지의 핵심)
-    const [picksByUser, setPicksByUser] = useState<PicksByUser>({});
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
+    // (유저 탭 관련 상태는 생략: 기존 그대로)
 
     /* ---------- 캐릭터 목록 로드 ---------- */
     useEffect(() => {
@@ -288,50 +200,7 @@ export default function UserMultiSuggestClient() {
         })();
     }, []);
 
-    /* ---------- 유저 추가 ---------- */
-    const normalized = input.trim().toLowerCase();
-    const dup = users.some((u) => u.name.trim().toLowerCase() === normalized);
-
-    async function fetchUserProfileMock(name: string): Promise<UserProfile> {
-        if (characters.length === 0) return { name, topChars: [] };
-        const seed = hash(name);
-        const pick = (k: number) => characters[(seed + k) % characters.length];
-        const top = [pick(0), pick(3), pick(7)].map((t) => ({
-            id: t.id,
-            name: t.name,
-            imageUrl: t.imageUrl,
-        }));
-        return { name, topChars: top };
-    }
-
-    const addUser = async () => {
-        const display = input.trim();
-        if (!display || dup || users.length >= 3) {
-            setInput("");
-            return;
-        }
-        setLoading(true);
-        try {
-            const u = await fetchUserProfileMock(display);
-            setUsers((prev) => [...prev, u]);
-            setInput("");
-        } catch {
-            toast.error("Failed to fetch user info.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const removeUser = (name: string) => {
-        setUsers((prev) => prev.filter((u) => u.name !== name));
-        setPicksByUser((prev) => {
-            const cp = { ...prev };
-            delete cp[name];
-            return cp;
-        });
-    };
-
-    /* ---------- Character 탭(기존) ---------- */
+    /* ---------- Character 탭 ---------- */
     const filteredChars = useMemo(() => {
         const term = charQ.trim().toLowerCase();
         const selectedIds = new Set(selectedChars.map((c) => c.id));
@@ -348,129 +217,73 @@ export default function UserMultiSuggestClient() {
         setPickerTarget(c);
         setPickerOpen(true);
     };
-    const pickWeapon = (id: number, weapon: string) => {
+
+    /** ✅ 무기 선택 콜백: CharacterWeaponPicker 가 `cwId`를 함께 넘겨야 함 */
+    const pickWeapon = (id: number, weaponLabel: string, cwId: number) => {
         const c = characters.find((x) => x.id === id);
         if (!c) return;
         setSelectedChars((prev) => [
             ...prev,
-            { id: c.id, name: c.name, imageUrl: c.imageUrl, weapon },
+            {
+                id: c.id,
+                name: c.name,
+                imageUrl: c.imageUrl,
+                weapon: weaponLabel,
+                cwId,
+            },
         ]);
     };
+
     const removeChar = (id: number) =>
         setSelectedChars((p) => p.filter((c) => c.id !== id));
 
-    /* ---------- 결과 ---------- */
-    const allIds = useMemo(() => characters.map((c) => c.id), [characters]);
+    /* ---------- 실측 조합 지표 요청 ---------- */
+    const [measured, setMeasured] = useState<CompSuggestion | null>(null);
+    const [metricLoading, setMetricLoading] = useState(false);
 
-    // ▷ 유저별 Top3 id 목록
-    const top3IdsByUser = useMemo(() => {
-        const map: Record<string, number[]> = {};
-        users.forEach((u) => {
-            const ids = Array.from(new Set(u.topChars.map((t) => t.id))).slice(
-                0,
-                3,
-            );
-            map[u.name] = ids;
-        });
-        return map;
-    }, [users]);
-
-    // ▷ Top3에 해당하는 선택만 필터링
-    const picksForTop3 = useMemo(() => {
-        const out: PicksByUser = {};
-        Object.entries(top3IdsByUser).forEach(([name, ids]) => {
-            out[name] = (picksByUser[name] ?? []).filter((p) =>
-                ids.includes(p.id),
-            );
-        });
-        return out;
-    }, [picksByUser, top3IdsByUser]);
-
-    // ▷ “각 유저가 최소 1개 이상 선택했는가?” (추가된 정책)
-    const hasOnePickPerUser = useMemo(() => {
-        if (users.length === 0) return false;
-        return users.every((u) => (picksForTop3[u.name]?.length ?? 0) >= 1);
-    }, [users, picksForTop3]);
-
-    // ② 선택 CW + 풀 보완 추천
-    const finalSuggestions: CompSuggestion[] = useMemo(() => {
-        if (!hasOnePickPerUser) return [];
-        return suggestFromUserCwWithPool(picksForTop3, allIds, 8);
-    }, [hasOnePickPerUser, picksForTop3, allIds]);
-
-    // 라벨 매핑: cwId -> "캐릭터 (무기)" (Top3 선택만 반영)
-    const cwLabelMap = useMemo(() => {
-        const m: Record<
-            number,
-            { charId: number; charName: string; weapon: string }
-        > = {};
-        for (const list of Object.values(picksForTop3)) {
-            for (const p of list) {
-                m[p.cwId] = {
-                    charId: p.id,
-                    charName: p.name,
-                    weapon: p.weapon,
-                };
-            }
+    useEffect(() => {
+        const ids = selectedChars
+            .map((c) => c.cwId)
+            .filter((x): x is number => Number.isFinite(x));
+        if (ids.length !== 3) {
+            setMeasured(null);
+            return;
         }
-        return m;
-    }, [picksForTop3]);
+        (async () => {
+            try {
+                setMetricLoading(true);
+                const m = await fetchCompMetrics(ids, { minSamples: 50 }); // tier/start/end 필요시 추가
+                if (!m) {
+                    setMeasured(null);
+                    return;
+                }
+                // 카드에 맞게 매핑
+                setMeasured({
+                    comp: ids, // cwId 3개
+                    winRateEst: m.win_rate,
+                    pickRateEst: m.pick_rate,
+                    mmrGainEst: m.avg_mmr,
+                    support: {
+                        fromPairs: 0.0,
+                        fromSolo: 0.0,
+                        fromCluster: 1.0,
+                        modeled: false,
+                    },
+                    note: `samples: ${m.samples}`,
+                });
+            } catch {
+                setMeasured(null);
+            } finally {
+                setMetricLoading(false);
+            }
+        })();
+    }, [selectedChars]);
 
-    // 이름 표시: cwId면 "이름 (무기)", 아니면 캐릭터 이름
-    const nameById = (id: number) => {
-        const cw = cwLabelMap[id];
-        if (cw) return `${cw.charName} (${cw.weapon})`;
-        return characters.find((x) => x.id === id)?.name || `ID ${id}`;
-    };
-
-    // ✅ 자식 콜백: 유저별 선택 변경 반영
-    const handlePickChange = (userName: string, picks: PicksByUser[string]) => {
-        setPicksByUser((prev) => ({ ...prev, [userName]: picks }));
-    };
-
-    /* ============== Render ============== */
+    /* ---------- 렌더 ---------- */
     return (
         <div className="text-app">
-            {/* <SegmentedTabs */}
-            {/*     tabs={TABS} */}
-            {/*     value={tab} */}
-            {/*     onChange={(v) => setTab(v as Tab)} */}
-            {/*     ariaLabel="추천 기준 선택" */}
-            {/* /> */}
-
-            {/*  ───────────── User 탭 ───────────── */}
-            {/* {tab === "user" && ( */}
-            {/*     <section className="space-y-4"> */}
-            {/*         <UserAddForm */}
-            {/*             input={input} */}
-            {/*             setInput={setInput} */}
-            {/*             loading={loading} */}
-            {/*             usersLength={users.length} */}
-            {/*             isDuplicate={dup} */}
-            {/*             onAdd={addUser} */}
-            {/*             onClearAll={() => { */}
-            {/*                 setUsers([]); */}
-            {/*                 setPicksByUser({}); // ← 선택도 같이 초기화 */}
-            {/*             }} */}
-            {/*         /> */}
-            {/**/}
-            {/*          ✅ 선택 상태는 부모가 소유하고 자식은 컨트롤드 렌더만  */}
-            {/*         <Suspense fallback={null}> */}
-            {/*             {mounted ? ( */}
-            {/*                 <AddedUsersList */}
-            {/*                     key={users.map((u) => u.name).join("|")} */}
-            {/*                     users={users} */}
-            {/*                     onRemove={removeUser} */}
-            {/*                     picks={picksByUser} */}
-            {/*                     onPickChange={handlePickChange} */}
-            {/*                 /> */}
-            {/*             ) : null} */}
-            {/*         </Suspense> */}
-            {/*     </section> */}
-            {/* )} */}
-
-            {/* ───────────── Character 탭(기존) ───────────── */}
             <section className="space-y-5">
+                {/* 선택된 캐릭들 */}
                 <div className="card">
                     <div
                         className="text-sm"
@@ -520,6 +333,7 @@ export default function UserMultiSuggestClient() {
                     </div>
                 </div>
 
+                {/* 캐릭터 카탈로그 */}
                 <details className="card p-0 overflow-hidden" open>
                     <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
                         Character catalog{" "}
@@ -566,15 +380,47 @@ export default function UserMultiSuggestClient() {
                     </div>
                 </details>
 
-                {selectedChars.length === 0 ? (
-                    <div
-                        className="mt-6 text-sm"
-                        style={{ color: "var(--text-muted)" }}
-                    >
-                        Pick 1–3 characters and optionally weapons to see
-                        recommendations.
-                    </div>
-                ) : (
+                {/* ✅ 실측 지표 카드: 3개 무기(cwId) 모두 선택되었을 때 */}
+                {selectedChars.filter((c) => Number.isFinite(c.cwId)).length ===
+                    3 && (
+                    <>
+                        <div
+                            className="text-sm mb-2"
+                            style={{ color: "var(--text-muted)" }}
+                        >
+                            Measured metrics for selected composition
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {measured ? (
+                                <CompSuggestionCard
+                                    s={measured}
+                                    nameById={(id) => {
+                                        // id는 cwId. 선택 목록에서 찾아 라벨링
+                                        const hit = selectedChars.find(
+                                            (c) => c.cwId === id,
+                                        );
+                                        return hit
+                                            ? `${hit.name} (${hit.weapon ?? ""})`
+                                            : `CW ${id}`;
+                                    }}
+                                    badge="MEASURED"
+                                />
+                            ) : (
+                                <div
+                                    className="card p-4 text-sm"
+                                    style={{ color: "var(--text-muted)" }}
+                                >
+                                    {metricLoading
+                                        ? "Loading metrics…"
+                                        : "Not enough samples."}
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
+
+                {/* (선택) 모델드 추천: 캐릭터만 선택한 경우 등 기존 모형 카드 유지 */}
+                {selectedChars.length > 0 && (
                     <>
                         <div
                             className="text-sm mb-2"
@@ -649,7 +495,8 @@ export default function UserMultiSuggestClient() {
                 )}
             </section>
 
-            {/* Character 탭용 무기 선택 모달 */}
+            {/* 무기 선택 모달
+         ✅ onPick 시그니처를 (id, weaponLabel, cwId) 로 맞춰주세요. */}
             <CharacterWeaponPicker
                 key={pickerTarget?.id ?? "none"}
                 open={pickerOpen}
