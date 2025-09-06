@@ -16,14 +16,8 @@ export default async function CharacterStatPage() {
         .then((j) => j.data ?? j);
 
     const rows = (stats as any[]).map((s: any) => ({
-        tier:
-            s.win_rate >= 0.58
-                ? "A"
-                : s.win_rate >= 0.52
-                  ? "B"
-                  : s.win_rate >= 0.48
-                    ? "C"
-                    : "D",
+        score: s.s_score,
+        tier: s.tier,
         characterId: s.character_id,
         weaponId: s.weapon_id,
         name: s.character_name_kr,

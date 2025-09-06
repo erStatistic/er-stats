@@ -6,7 +6,6 @@ import { ClusterTriadSummary } from "@/types";
 import Carousel from "@/features/ui/Carousel";
 import ClusterCompCard from "./ClusterCompCard";
 import { formatDuration } from "@/lib/stats";
-
 import { PATCHES, GAME_TIERS } from "@/features";
 import { SortKey } from "@/features/cluster-comps";
 
@@ -20,12 +19,31 @@ export default function ClusterCompsClient({
     const [tier, setTier] = useState<GameTier>("All");
     const [sort, setSort] = useState<SortKey>("winRate");
 
-    // 캐러셀 Top3 (전체 기준)
+    // Top3 (전체 기준)
     const topOverall = useMemo(() => {
         const arr = [...initial];
         arr.sort((a, b) => b.winRate - a.winRate);
         return arr.slice(0, Math.min(3, arr.length));
     }, [initial]);
+
+    // ✅ Top3의 최대값(승률/픽률/평균MMR/게임수) 계산 → 진행바 스케일링에 사용
+    const topMax = useMemo(() => {
+        if (topOverall.length === 0) {
+            return { winRate: 1, pickRate: 1, mmr: 1, games: 1 };
+        }
+        return {
+            winRate: Math.max(
+                0,
+                ...topOverall.map((s) => Number(s.winRate || 0)),
+            ), // 0~1
+            pickRate: Math.max(
+                0,
+                ...topOverall.map((s) => Number(s.pickRate || 0)),
+            ), // 0~1
+            mmr: Math.max(1, ...topOverall.map((s) => Number(s.mmrGain || 0))),
+            games: Math.max(1, ...topOverall.map((s) => Number(s.count || 0))),
+        };
+    }, [topOverall]);
 
     // 필터링
     const filtered = useMemo(() => {
@@ -41,7 +59,7 @@ export default function ClusterCompsClient({
             );
     }, [initial, patch, tier, q]);
 
-    // 정렬 (생존시간 정식 필드 사용)
+    // 정렬
     const sorted = useMemo(() => {
         const c = [...filtered];
         c.sort((a, b) => {
@@ -55,7 +73,7 @@ export default function ClusterCompsClient({
                 case "survivalTime": {
                     const na = a.survivalTime ?? -Infinity;
                     const nb = b.survivalTime ?? -Infinity;
-                    return nb - na; // 큰(오래 생존) 순
+                    return nb - na;
                 }
                 default:
                     return b.winRate - a.winRate;
@@ -83,7 +101,8 @@ export default function ClusterCompsClient({
                         scaleInactive={0.9}
                     >
                         {topOverall.map((s, i) => (
-                            <ClusterCompCard key={i} s={s} />
+                            <ClusterCompCard key={i} s={s} max={topMax} />
+                            //             └─ ✅ 진행바 최대값 전달
                         ))}
                     </Carousel>
                 </>
@@ -131,14 +150,13 @@ export default function ClusterCompsClient({
                     <option value="winRate">승률</option>
                     <option value="pickRate">픽률</option>
                     <option value="mmrGain">평균 MMR</option>
-                    <option value="survivalTime">평균 생존시간</option>{" "}
-                    {/* ✅ 추가 */}
+                    <option value="survivalTime">평균 생존시간</option>
                     <option value="count">게임 수</option>
                 </select>
             </div>
 
             <div className="card p-0">
-                {/* ✅ 스크롤 컨테이너: 세로/가로 스크롤 */}
+                {/* 표 영역 */}
                 <div className="max-h-[60vh] overflow-auto overflow-x-auto">
                     <table className="min-w-[720px] w-full text-sm">
                         <thead className="bg-muted sticky top-0 z-10">

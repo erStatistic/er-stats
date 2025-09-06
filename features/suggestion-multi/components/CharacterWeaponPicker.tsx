@@ -14,14 +14,18 @@ type WeaponRow = {
     code?: number;
     name: string;
     imageUrl?: string;
-    cwId?: number;
+    cwId: number; // ✅ 반드시 포함
 };
 
 /* ---- API 유틸 ---- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
+const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
+const HAS_PREFIX = RAW_BASE.endsWith("/api/v1");
+const API = (p: string) =>
+    `${RAW_BASE}${HAS_PREFIX ? "" : "/api/v1"}${p.startsWith("/") ? p : `/${p}`}`;
 
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const url = API(path);
+    const res = await fetch(url, {
         cache: "no-store",
         headers: { accept: "application/json" },
         signal,
@@ -35,52 +39,23 @@ export default function CharacterWeaponPicker({
     open,
     character,
     onClose,
-    onPick, // (charId, weaponName) => void
+    onPick, // (charId, weaponName, cwId)
 }: {
     open: boolean;
     character: CharItem | null;
     onClose: () => void;
-    onPick: (id: number, weapon: string) => void;
+    onPick: (id: number, weapon: string, cwId: number) => void;
 }) {
-    const panelRef = useRef<HTMLDivElement | null>(null);
     const firstBtnRef = useRef<HTMLButtonElement | null>(null);
 
     const [weapons, setWeapons] = useState<WeaponRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
-    // 직전 캐릭터 id (렌더 시점에 변경 감지용)
-    const prevIdRef = useRef<number | null>(null);
-    const charId = character?.id ?? null;
-    const charChangedThisRender =
-        open && charId !== null && prevIdRef.current !== charId;
-
-    // Esc로 닫기
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [open, onClose]);
-
-    // 닫히면 상태 정리
-    useEffect(() => {
-        if (!open) {
-            setWeapons([]);
-            setErr(null);
-            setLoading(false);
-            prevIdRef.current = null;
-        }
-    }, [open]);
-
-    // 열릴 때 & 캐릭터가 바뀔 때: 이전 목록 즉시 비우고 새로 로드
+    // 열릴 때 & 캐릭터 바뀔 때 로드
     useEffect(() => {
         if (!open || !character) return;
 
-        // 렌더 직후부터 “이 캐릭터에 대한 화면”으로 간주
-        prevIdRef.current = character.id;
-
-        // 즉시 초기화(잔상 방지)
         setWeapons([]);
         setErr(null);
         setLoading(true);
@@ -96,7 +71,7 @@ export default function CharacterWeaponPicker({
                 };
 
                 const rows = await fetchJSON<CwTab[]>(
-                    `/api/v1/characters/${character.id}/cws`,
+                    `/characters/${character.id}/cws`,
                     ctrl.signal,
                 );
 
@@ -107,8 +82,9 @@ export default function CharacterWeaponPicker({
                         code: r.weapon?.code,
                         name: r.weapon?.name ?? "무기",
                         imageUrl: r.weapon?.imageUrl ?? "",
-                        cwId: r.cwId,
+                        cwId: Number(r.cwId),
                     }))
+                    // 같은 무기 코드 중복 제거
                     .filter(
                         (x, i, arr) =>
                             arr.findIndex((y) => y.code === x.code) === i,
@@ -121,7 +97,6 @@ export default function CharacterWeaponPicker({
                     });
 
                 setWeapons(mapped);
-                // 첫 버튼 포커스
                 setTimeout(() => firstBtnRef.current?.focus(), 0);
             } catch (e: any) {
                 if (!alive) return;
@@ -142,8 +117,6 @@ export default function CharacterWeaponPicker({
 
     if (!open || !character) return null;
 
-    const showLoading = loading || charChangedThisRender;
-
     return (
         <div
             className="fixed inset-0 z-40 flex items-center justify-center bg-elev-30"
@@ -154,11 +127,7 @@ export default function CharacterWeaponPicker({
             aria-modal="true"
             aria-labelledby="weapon-picker-title"
         >
-            <div
-                ref={panelRef}
-                className="card w-[min(92vw,420px)] p-0 overflow-hidden"
-            >
-                {/* 헤더 */}
+            <div className="card w-[min(92vw,420px)] p-0 overflow-hidden">
                 <div className="px-4 py-3 border-b border-app bg-surface">
                     <div className="flex items-center gap-3">
                         <img
@@ -180,17 +149,16 @@ export default function CharacterWeaponPicker({
                     </div>
                 </div>
 
-                {/* 본문 */}
                 <div className="p-4">
-                    {showLoading && (
+                    {loading && (
                         <div className="text-sm text-muted-app">
                             불러오는 중…
                         </div>
                     )}
-                    {!showLoading && err && (
+                    {!loading && err && (
                         <div className="text-sm text-red-400">{err}</div>
                     )}
-                    {!showLoading && !err && (
+                    {!loading && !err && (
                         <div className="grid grid-cols-2 gap-2">
                             {weapons.map((w, idx) => (
                                 <button
@@ -198,7 +166,7 @@ export default function CharacterWeaponPicker({
                                     ref={idx === 0 ? firstBtnRef : undefined}
                                     className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm hover:bg-elev-10 transition focus:outline-none focus:ring-2 focus:ring-[var(--brand)] flex items-center gap-2"
                                     onClick={() => {
-                                        onPick(character.id, w.name);
+                                        onPick(character.id, w.name, w.cwId);
                                         onClose();
                                     }}
                                 >
@@ -223,7 +191,6 @@ export default function CharacterWeaponPicker({
                     )}
                 </div>
 
-                {/* 푸터 */}
                 <div className="px-4 py-3 border-t border-app bg-surface flex justify-end">
                     <button
                         className="rounded-xl border border-app bg-surface text-app px-3 py-1.5 text-sm hover:bg-elev-10 transition focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"

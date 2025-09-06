@@ -1,18 +1,21 @@
-// features/suggest/UserMultiSuggestClient.tsx
 "use client";
 
-import { CompSuggestion, UserProfile } from "@/types";
+import { CompSuggestion } from "@/types";
 import CompSuggestionCard from "./CompSuggestionCard";
 import { toast } from "sonner";
 import CharacterWeaponPicker, { CharItem } from "./CharacterWeaponPicker";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import AddedUsersList from "./AddedUsersList";
+import { useEffect, useMemo, useState } from "react";
 
 /* ============== API 유틸 ============== */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
+/** 예: NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080" (꼭 슬래시 제거) */
+const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
+const HAS_PREFIX = RAW_BASE.endsWith("/api/v1");
+const API = (p: string) =>
+    `${RAW_BASE}${HAS_PREFIX ? "" : "/api/v1"}${p.startsWith("/") ? p : `/${p}`}`;
 
 async function fetchJSON<T>(path: string): Promise<T> {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const url = API(path);
+    const res = await fetch(url, {
         cache: "no-store",
         headers: { accept: "application/json" },
     });
@@ -21,7 +24,39 @@ async function fetchJSON<T>(path: string): Promise<T> {
     return (j?.data ?? j) as T;
 }
 
-/** 선택된 cw 3개로 조합 지표 조회(서버의 GetCompMetricsBySelectedCWs) */
+/* ============== 타입 ============== */
+type SelectedChar = {
+    id: number;
+    name: string;
+    imageUrl: string;
+    weapon?: string;
+    cwId?: number; // 선택된 무기(있으면 바로 사용)
+};
+
+/** 백엔드 실제 응답 스키마 */
+type CompMetricsBoth = {
+    by_cw?: {
+        cw_ids: number[];
+        samples: number;
+        wins: number;
+        win_rate: number | string;
+        pick_rate: number | string;
+        avg_mmr: number | string;
+        avg_survival: number | string;
+    };
+    by_cluster?: {
+        cluster_ids: number[];
+        cluster_label: string;
+        samples: number;
+        wins: number;
+        win_rate: number | string;
+        pick_rate: number | string;
+        avg_mmr: number | string;
+        avg_survival: number | string;
+    };
+};
+
+/** 프론트에서 쓰기 쉬운 평평한 타입 */
 type CompMetricResp = {
     samples: number;
     wins: number;
@@ -29,148 +64,93 @@ type CompMetricResp = {
     pick_rate: number;
     avg_mmr: number;
     avg_survival: number;
+    source: "cw" | "cluster";
 };
+
+function toNum(x: any): number {
+    const n = typeof x === "string" ? parseFloat(x) : x;
+    return Number.isFinite(n) ? n : 0;
+}
+
+/** 선택된 cw 3개로 조합 지표 조회 (정규화) */
 async function fetchCompMetrics(
     cwIds: number[],
     opts?: { start?: string; end?: string; tier?: string; minSamples?: number },
 ): Promise<CompMetricResp | null> {
-    const body = JSON.stringify({
-        cw: cwIds, // ← 필수: [cwId, cwId, cwId]
-        start: opts?.start ?? null,
-        end: opts?.end ?? null,
-        tier: opts?.tier ?? "",
-        minSamples: opts?.minSamples ?? 50,
-    });
-    const res = await fetch(`${API_BASE}/analytics/comp/metrics`, {
+    const url = API("/analytics/comp/metrics");
+    const res = await fetch(url, {
         method: "POST",
         headers: {
             "content-type": "application/json",
             accept: "application/json",
         },
         cache: "no-store",
-        body,
+        body: JSON.stringify({
+            cw: cwIds,
+            // 백엔드가 포인터(nil) + 역참조를 쓰므로 null 대신 빈 문자열 권장
+            start: opts?.start ?? "",
+            end: opts?.end ?? "",
+            tier: opts?.tier ?? "",
+            // 멀티 서제스트는 최소샘플 기준을 두지 않으므로 1로
+            minSamples: opts?.minSamples ?? 1,
+        }),
     });
     if (!res.ok) return null;
-    const j = await res.json();
-    return (j?.data ?? j) as CompMetricResp;
-}
 
-/* ============== 데모 점수(기존) ============== */
-function hash(s: string) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) {
-        h = (h << 5) - h + s.charCodeAt(i);
-        h |= 0;
-    }
-    return Math.abs(h);
-}
-function scoreFromIds(ids: number[]) {
-    return hash(ids.sort((a, b) => a - b).join("-"));
-}
-function rnd(seed: number, a: number, b: number) {
-    const r = Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1;
-    return a + (b - a) * r;
-}
-function compStats(comp: number[]) {
-    const s = scoreFromIds(comp);
+    const raw = await res.json();
+    const data: CompMetricsBoth | any = raw?.data ?? raw;
+
+    const picked =
+        (data?.by_cw && { ...data.by_cw, __source: "cw" as const }) ||
+        (data?.by_cluster && {
+            ...data.by_cluster,
+            __source: "cluster" as const,
+        }) ||
+        null;
+
+    if (!picked) return null;
+
     return {
-        winRate: rnd(s, 0.46, 0.65),
-        pickRate: rnd(s + 13, 0.05, 0.2),
-        mmrGain: rnd(s + 37, 5.0, 12.0),
-        count: Math.round(rnd(s + 91, 60, 320)),
+        samples: picked.samples ?? 0,
+        wins: picked.wins ?? 0,
+        win_rate: toNum(picked.win_rate),
+        pick_rate: toNum(picked.pick_rate),
+        avg_mmr: toNum(picked.avg_mmr),
+        avg_survival: toNum(picked.avg_survival),
+        source: picked.__source,
     };
 }
 
-/* ============== 신규: 선택 CW 기반 + 부족분 풀 보완(유저 탭에서 사용) ============== */
-type UserPick = {
-    id: number;
-    name: string;
-    imageUrl: string;
-    cwId: number;
-    weapon: string;
+/** cw 단위 성능행 (GetCwStats 결과와 호환) */
+type CwStatRow = {
+    cw_id: number;
+    character_id: number;
+    character_name_kr: string;
+    weapon_id: number;
+    weapon_name_kr: string;
+    samples: number;
+    wins: number;
+    win_rate: number;
+    pick_rate: number;
+    avg_mmr: number;
+    avg_survival: number;
 };
-type PicksByUser = Record<string, UserPick[]>;
-function suggestFromUserCwWithPool(
-    picksByUserTop3: PicksByUser,
-    allCharIds: number[],
-    topK = 8,
-): CompSuggestion[] {
-    const sets = Object.values(picksByUserTop3).filter((arr) => arr.length > 0);
-    const n = Math.min(sets.length, 3);
-    if (n === 0) return [];
 
-    const seen = new Set<string>();
-    const out: CompSuggestion[] = [];
-    const push = (comp: number[]) => {
-        const key = comp
-            .slice()
-            .sort((a, b) => a - b)
-            .join("-");
-        if (seen.has(key)) return;
-        seen.add(key);
-        const { winRate, pickRate, mmrGain, count } = compStats(comp);
-        out.push({
-            comp,
-            winRateEst: winRate,
-            pickRateEst: pickRate,
-            mmrGainEst: mmrGain,
-            support: {
-                fromPairs: 0.45,
-                fromSolo: 0.2,
-                fromCluster: 0.35,
-                modeled: true,
-            },
-            note: `samples: ${count}`,
-        });
-    };
-
-    if (n === 3) {
-        const [A, B, C] = sets;
-        for (const a of A)
-            for (const b of B)
-                for (const c of C) {
-                    const chars = new Set([a.id, b.id, c.id]);
-                    if (chars.size !== 3) continue;
-                    push([a.cwId, b.cwId, c.cwId]);
-                }
-    } else if (n === 2) {
-        const [A, B] = sets;
-        for (const a of A)
-            for (const b of B) {
-                if (a.id === b.id) continue;
-                for (const x of allCharIds) {
-                    if (x === a.id || x === b.id) continue;
-                    push([a.cwId, b.cwId, x]); // x는 캐릭 id(무기 미지정)
-                }
-            }
-    } else {
-        const [A] = sets;
-        for (const a of A) {
-            for (let i = 0; i < allCharIds.length; i++) {
-                const b = allCharIds[i];
-                if (b === a.id) continue;
-                for (let j = i + 1; j < allCharIds.length; j++) {
-                    const c = allCharIds[j];
-                    if (c === a.id || c === b) continue;
-                    push([a.cwId, b, c]);
-                }
-            }
-        }
-    }
-    const score = (c: CompSuggestion) =>
-        c.winRateEst * 1.2 + c.mmrGainEst / 15 + c.pickRateEst * 0.6;
-    return out.sort((a, b) => score(b) - score(a)).slice(0, topK);
+async function fetchCwStats(params?: {
+    start?: string | null;
+    end?: string | null;
+    tier?: string;
+    minSamples?: number;
+}): Promise<CwStatRow[]> {
+    const sp = new URLSearchParams();
+    if (params?.start) sp.set("start", params.start);
+    if (params?.end) sp.set("end", params.end);
+    if (params?.tier) sp.set("tier", params.tier);
+    if (params?.minSamples != null)
+        sp.set("minSamples", String(params.minSamples));
+    const q = sp.toString();
+    return fetchJSON<CwStatRow[]>(`/analytics/cw/stats${q ? `?${q}` : ""}`);
 }
-
-/* ============== 타입 ============== */
-type SelectedChar = {
-    id: number;
-    name: string;
-    imageUrl: string;
-    weapon?: string;
-    /** ✅ 반드시 포함: 선택된 무기 cwId */
-    cwId?: number;
-};
 
 export default function UserMultiSuggestClient() {
     // 전체 캐릭(추천 풀)
@@ -181,13 +161,11 @@ export default function UserMultiSuggestClient() {
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState<CharItem | null>(null);
 
-    // (유저 탭 관련 상태는 생략: 기존 그대로)
-
     /* ---------- 캐릭터 목록 로드 ---------- */
     useEffect(() => {
         (async () => {
             try {
-                const rows = await fetchJSON<Array<any>>("/api/v1/characters");
+                const rows = await fetchJSON<Array<any>>("/characters");
                 const mapped: CharItem[] = rows.map((c) => ({
                     id: c.id ?? c.ID,
                     name: c.name_kr ?? "이름 없음",
@@ -218,7 +196,7 @@ export default function UserMultiSuggestClient() {
         setPickerOpen(true);
     };
 
-    /** ✅ 무기 선택 콜백: CharacterWeaponPicker 가 `cwId`를 함께 넘겨야 함 */
+    /** 무기 선택 콜백: CharacterWeaponPicker 가 `cwId`를 함께 넘김 */
     const pickWeapon = (id: number, weaponLabel: string, cwId: number) => {
         const c = characters.find((x) => x.id === id);
         if (!c) return;
@@ -237,7 +215,7 @@ export default function UserMultiSuggestClient() {
     const removeChar = (id: number) =>
         setSelectedChars((p) => p.filter((c) => c.id !== id));
 
-    /* ---------- 실측 조합 지표 요청 ---------- */
+    /* ---------- ① 선택 3개(모두 cwId)라면 단일 조합 측정 ---------- */
     const [measured, setMeasured] = useState<CompSuggestion | null>(null);
     const [metricLoading, setMetricLoading] = useState(false);
 
@@ -252,24 +230,25 @@ export default function UserMultiSuggestClient() {
         (async () => {
             try {
                 setMetricLoading(true);
-                const m = await fetchCompMetrics(ids, { minSamples: 50 }); // tier/start/end 필요시 추가
+                const m = await fetchCompMetrics(ids, { minSamples: 1 });
                 if (!m) {
                     setMeasured(null);
                     return;
                 }
-                // 카드에 맞게 매핑
                 setMeasured({
-                    comp: ids, // cwId 3개
-                    winRateEst: m.win_rate,
-                    pickRateEst: m.pick_rate,
-                    mmrGainEst: m.avg_mmr,
+                    comp: ids,
+                    winRateEst: m.win_rate ?? 0,
+                    pickRateEst: m.pick_rate ?? 0,
+                    mmrGainEst: m.avg_mmr ?? 0,
                     support: {
-                        fromPairs: 0.0,
-                        fromSolo: 0.0,
-                        fromCluster: 1.0,
                         modeled: false,
+                        fromPairs: 0,
+                        fromSolo: 0,
+                        fromCluster: 1,
                     },
-                    note: `samples: ${m.samples}`,
+                    note: `samples: ${m.samples}${
+                        m.source === "cluster" ? " (cluster agg)" : ""
+                    }`,
                 });
             } catch {
                 setMeasured(null);
@@ -278,6 +257,117 @@ export default function UserMultiSuggestClient() {
             }
         })();
     }, [selectedChars]);
+
+    /* ---------- ② DB 기반 추천(선택 캐릭 ≥ 3) ---------- */
+    const [suggestions, setSuggestions] = useState<CompSuggestion[]>([]);
+    const [suggestLoading, setSuggestLoading] = useState(false);
+    // cwId -> "캐릭 (무기)" 라벨러
+    const [cwNameById, setCwNameById] = useState<(id: number) => string>(
+        () => (id) => `CW ${id}`,
+    );
+
+    useEffect(() => {
+        if (selectedChars.length < 3) {
+            setSuggestions([]);
+            return;
+        }
+
+        (async () => {
+            setSuggestLoading(true);
+            try {
+                // 1) 후보 추출용 cw 통계 (최소샘플 제한 없이 1로)
+                const rows = await fetchCwStats({ minSamples: 1 });
+
+                const TOP_K = 3;
+                const cwLabel = new Map<number, string>();
+                const candidates: number[][] = [];
+
+                for (const sel of selectedChars.slice(0, 3)) {
+                    if (sel.cwId) {
+                        candidates.push([sel.cwId]);
+                        cwLabel.set(
+                            sel.cwId,
+                            `${sel.name} (${sel.weapon ?? ""})`.trim(),
+                        );
+                        continue;
+                    }
+                    const pool = rows
+                        .filter((r) => r.character_id === sel.id)
+                        .sort((a, b) => b.win_rate - a.win_rate)
+                        .slice(0, TOP_K);
+
+                    const ids = pool.map((r) => {
+                        cwLabel.set(
+                            r.cw_id,
+                            `${r.character_name_kr ?? sel.name} (${r.weapon_name_kr ?? ""})`.trim(),
+                        );
+                        return r.cw_id;
+                    });
+
+                    if (ids.length === 0) {
+                        setSuggestions([]);
+                        setSuggestLoading(false);
+                        return;
+                    }
+                    candidates.push(ids);
+                }
+
+                // 2) 후보 교차곱 조합
+                const combos: number[][] = [];
+                const LIMIT = 24;
+                const [A, B, C] = candidates;
+                for (const a of A)
+                    for (const b of B)
+                        for (const c of C) {
+                            if (combos.length >= LIMIT) break;
+                            combos.push([a, b, c]);
+                        }
+
+                // 3) 각 조합 메트릭 호출 (최소샘플 1) + 정규화 사용
+                const results = await Promise.allSettled(
+                    combos.map((ids) =>
+                        fetchCompMetrics(ids, { minSamples: 1 }),
+                    ),
+                );
+
+                // 샘플 0도 카드로 표기
+                const out: CompSuggestion[] = results.map((res, i) => {
+                    const m = res.status === "fulfilled" ? res.value : null;
+                    return {
+                        comp: combos[i],
+                        winRateEst: m?.win_rate ?? 0,
+                        pickRateEst: m?.pick_rate ?? 0,
+                        mmrGainEst: m?.avg_mmr ?? 0,
+                        support: {
+                            modeled: false,
+                            fromPairs: 0,
+                            fromSolo: 0,
+                            fromCluster: 1,
+                        },
+                        note: `samples: ${m?.samples ?? 0}${
+                            m?.source === "cluster" ? " (cluster agg)" : ""
+                        }`,
+                    };
+                });
+
+                out.sort(
+                    (a, b) =>
+                        b.winRateEst - a.winRateEst ||
+                        b.mmrGainEst - a.mmrGainEst ||
+                        b.pickRateEst - a.pickRateEst,
+                );
+
+                setSuggestions(out.slice(0, 8));
+                setCwNameById(
+                    () => (id: number) => cwLabel.get(id) ?? `CW ${id}`,
+                );
+            } catch {
+                setSuggestions([]);
+            } finally {
+                setSuggestLoading(false);
+            }
+        })();
+    }, [JSON.stringify(selectedChars.map((c) => [c.id, c.cwId]))]);
 
     /* ---------- 렌더 ---------- */
     return (
@@ -380,47 +470,8 @@ export default function UserMultiSuggestClient() {
                     </div>
                 </details>
 
-                {/* ✅ 실측 지표 카드: 3개 무기(cwId) 모두 선택되었을 때 */}
-                {selectedChars.filter((c) => Number.isFinite(c.cwId)).length ===
-                    3 && (
-                    <>
-                        <div
-                            className="text-sm mb-2"
-                            style={{ color: "var(--text-muted)" }}
-                        >
-                            Measured metrics for selected composition
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {measured ? (
-                                <CompSuggestionCard
-                                    s={measured}
-                                    nameById={(id) => {
-                                        // id는 cwId. 선택 목록에서 찾아 라벨링
-                                        const hit = selectedChars.find(
-                                            (c) => c.cwId === id,
-                                        );
-                                        return hit
-                                            ? `${hit.name} (${hit.weapon ?? ""})`
-                                            : `CW ${id}`;
-                                    }}
-                                    badge="MEASURED"
-                                />
-                            ) : (
-                                <div
-                                    className="card p-4 text-sm"
-                                    style={{ color: "var(--text-muted)" }}
-                                >
-                                    {metricLoading
-                                        ? "Loading metrics…"
-                                        : "Not enough samples."}
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
-
-                {/* (선택) 모델드 추천: 캐릭터만 선택한 경우 등 기존 모형 카드 유지 */}
-                {selectedChars.length > 0 && (
+                {/* ✅ DB 기반 추천 조합 (샘플 0도 카드 표시) */}
+                {selectedChars.length >= 3 && (
                     <>
                         <div
                             className="text-sm mb-2"
@@ -430,73 +481,37 @@ export default function UserMultiSuggestClient() {
                             selected
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(() => {
-                                const ids = selectedChars.map((c) => c.id);
-                                const out: CompSuggestion[] = [];
-                                const seen = new Set<string>();
-                                const push = (comp: number[]) => {
-                                    const key = comp
-                                        .slice()
-                                        .sort((a, b) => a - b)
-                                        .join("-");
-                                    if (seen.has(key)) return;
-                                    seen.add(key);
-                                    const {
-                                        winRate,
-                                        pickRate,
-                                        mmrGain,
-                                        count,
-                                    } = compStats(comp);
-                                    out.push({
-                                        comp,
-                                        winRateEst: winRate,
-                                        pickRateEst: pickRate,
-                                        mmrGainEst: mmrGain,
-                                        support: {
-                                            fromPairs: 0.5,
-                                            fromSolo: 0.2,
-                                            fromCluster: 0.3,
-                                            modeled: true,
-                                        },
-                                        note: `samples: ${count}`,
-                                    });
-                                };
-                                if (ids.length >= 3) {
-                                    for (let i = 0; i < ids.length; i++)
-                                        for (let j = i + 1; j < ids.length; j++)
-                                            for (
-                                                let k = j + 1;
-                                                k < ids.length;
-                                                k++
-                                            )
-                                                push([ids[i], ids[j], ids[k]]);
-                                }
-                                const score = (c: CompSuggestion) =>
-                                    c.winRateEst * 1.2 +
-                                    c.mmrGainEst / 15 +
-                                    c.pickRateEst * 0.6;
-                                return out
-                                    .sort((a, b) => score(b) - score(a))
-                                    .slice(0, 8)
-                                    .map((s, i) => (
-                                        <CompSuggestionCard
-                                            key={i}
-                                            s={s}
-                                            nameById={(id) =>
-                                                characters.find(
-                                                    (x) => x.id === id,
-                                                )?.name || `ID ${id}`
-                                            }
-                                        />
-                                    ));
-                            })()}
+                            {suggestLoading && (
+                                <div
+                                    className="card p-4 text-sm"
+                                    style={{ color: "var(--text-muted)" }}
+                                >
+                                    Loading suggestions…
+                                </div>
+                            )}
+                            {!suggestLoading &&
+                                suggestions.map((s, i) => (
+                                    <CompSuggestionCard
+                                        key={i}
+                                        s={s}
+                                        nameById={cwNameById}
+                                        badge="MEASURED"
+                                    />
+                                ))}
+                            {!suggestLoading && suggestions.length === 0 && (
+                                <div
+                                    className="card p-4 text-sm"
+                                    style={{ color: "var(--text-muted)" }}
+                                >
+                                    Not enough samples.
+                                </div>
+                            )}
                         </div>
                     </>
                 )}
             </section>
 
-            {/* 무기 선택 모달
-         ✅ onPick 시그니처를 (id, weaponLabel, cwId) 로 맞춰주세요. */}
+            {/* 무기 선택 모달 */}
             <CharacterWeaponPicker
                 key={pickerTarget?.id ?? "none"}
                 open={pickerOpen}

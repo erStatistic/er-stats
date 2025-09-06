@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { CharacterSummary } from "@/types";
 import CharacterTable from "./CharacterTable";
 import CharacterTabs from "./CharacterTabs";
-import { computeHoneySet } from "@/lib/stats";
 import { PATCHES, GAME_TIERS } from "@/features";
 import { getRankTier } from "@/features/character";
 import CharacterPicker from "./CharacterPicker";
+// (프로젝트에 따라 타입 경로가 다르면 조정)
+import type { Patch, GameTier } from "@/features";
 
 export default function CharacterClient({
     initialRows,
@@ -69,9 +70,17 @@ export default function CharacterClient({
         return out;
     };
 
+    // 패치별 데이터가 이미 서버에서 들어왔다면 그대로 사용
     const patchedRows = useMemo(() => initialRows, [initialRows, patch]);
 
-    // 🔍 이름/무기명 부분일치 + 초성일치, 그리고 티어 필터
+    // ✅ Honey 규칙(소수 기준: 0.15 = 15%)
+    const HONEY_RULE = { win: 0.15, pick: 0.02, mmr: 65 };
+    const isHoney = (r: CharacterSummary) =>
+        r.winRate >= HONEY_RULE.win &&
+        r.pickRate >= HONEY_RULE.pick &&
+        r.mmrGain >= HONEY_RULE.mmr;
+
+    // 🔍 검색 + 티어 필터
     const filtered = useMemo(() => {
         const raw = q.trim();
         const passTier = (r: CharacterSummary) => {
@@ -104,12 +113,10 @@ export default function CharacterClient({
         });
     }, [q, gameTier, patchedRows]);
 
-    const honey = useMemo(() => computeHoneySet(filtered, 3), [filtered]);
-
+    // ✅ 부모에서 Honey 필터 적용(규칙만)
     const visibleRows = useMemo(
-        () =>
-            honeyOnly ? filtered.filter((r) => honey.ids.has(r.id)) : filtered,
-        [filtered, honeyOnly, honey],
+        () => (honeyOnly ? filtered.filter(isHoney) : filtered),
+        [filtered, honeyOnly],
     );
 
     return (
@@ -118,7 +125,7 @@ export default function CharacterClient({
             <CharacterPicker chars={dbChars} />
 
             {/* ② 통계(테이블) 박스 */}
-            <section className="card ">
+            <section className="card">
                 <div className="mb-3 px-4 pt-4 flex flex-wrap items-center gap-2">
                     <input
                         className="w-56 rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-app text-app"
@@ -146,6 +153,7 @@ export default function CharacterClient({
                         items={GAME_TIERS}
                     />
 
+                    {/* 🍯 Honey 배지 보유만 보기 토글 */}
                     <button
                         type="button"
                         onClick={() => setHoneyOnly((prev) => !prev)}
@@ -162,11 +170,8 @@ export default function CharacterClient({
                     </button>
                 </div>
 
-                <CharacterTable
-                    rows={visibleRows}
-                    honeyIds={honey.ids}
-                    onSelect={goDetail}
-                />
+                {/* ✅ 규칙 기반 필터링 rows만 전달 / honeyIds는 넘기지 않음 */}
+                <CharacterTable rows={visibleRows} onSelect={goDetail} />
             </section>
         </main>
     );

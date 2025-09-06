@@ -5,13 +5,44 @@ import ClusterChip from "./ClusterChip";
 import { memo } from "react";
 import ClusterStat from "./ClusterStat";
 
+type MetricMax = {
+    /** 0~1 값 */
+    winRate?: number;
+    /** 0~1 값 */
+    pickRate?: number;
+    /** 정수/실수 */
+    mmr?: number;
+    /** 정수 */
+    games?: number;
+};
+
+function clamp01(x: number) {
+    if (!Number.isFinite(x)) return 0;
+    return Math.max(0, Math.min(1, x));
+}
+
 export default memo(function ClusterCompCard({
     s,
     title = "Top Cluster Team",
+    max,
 }: {
     s: ClusterTriadSummary;
     title?: string;
+    /** 진행바 스케일 상한 (선택) */
+    max?: MetricMax;
 }) {
+    // 최대값(미전달 시 기존 기본값 유지)
+    const wrMax = max?.winRate ?? 1; // 승률은 0~1
+    const prMax = max?.pickRate ?? 1; // 픽률은 0~1
+    const mmrMax = max?.mmr ?? 20; // 기본 20
+    const gamesMax = max?.games ?? 500; // 기본 500
+
+    // 비율 계산
+    const wrRatio = clamp01(s.winRate / wrMax);
+    const prRatio = clamp01(s.pickRate / prMax);
+    const mmrRatio = clamp01(s.mmrGain / mmrMax);
+    const gamesRatio = clamp01(s.count / gamesMax);
+
     return (
         <article
             className="
@@ -27,7 +58,6 @@ export default memo(function ClusterCompCard({
             <header
                 className="comp-banner rounded-t-2xl px-4 sm:px-6 py-3 sm:py-4 text-center"
                 style={{
-                    // 카드의 radius와 항상 동일하게 상단만 상속
                     borderTopLeftRadius: "inherit",
                     borderTopRightRadius: "inherit",
                 }}
@@ -59,25 +89,25 @@ export default memo(function ClusterCompCard({
                 <ClusterStat
                     label="승률"
                     value={`${(s.winRate * 100).toFixed(1)}%`}
-                    bar={s.winRate}
+                    bar={wrRatio}
                     barClass="bg-green-500"
                 />
                 <ClusterStat
                     label="픽률"
                     value={`${(s.pickRate * 100).toFixed(1)}%`}
-                    bar={s.pickRate}
+                    bar={prRatio}
                     barClass="bg-blue-500"
                 />
                 <ClusterStat
                     label="평균 MMR"
                     value={s.mmrGain.toFixed(1)}
-                    bar={Math.min(1, s.mmrGain / 20)}
+                    bar={mmrRatio}
                     barClass="bg-purple-500"
                 />
                 <ClusterStat
                     label="게임 수"
                     value={s.count.toLocaleString()}
-                    bar={Math.min(1, s.count / 500)}
+                    bar={gamesRatio}
                     barClass="bg-amber-400"
                 />
             </section>

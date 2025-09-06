@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { CharacterSummary, SortDir, SortKey } from "@/types";
 import {
-    computeHoneySet,
     computeTop10Threshold,
     formatMMR,
     formatPercent,
@@ -17,20 +16,20 @@ import HoneyBadge from "@/features/ui/HoneyBadge";
 type RowLike = CharacterSummary & {
     characterId?: number; // 서버 매핑 필드
     weaponId?: number; // 서버 매핑 필드
-    cwId?: number; // (있으면 사용)
+    cwId?: number;
+    s_score?: number; // snake_case 대응
+    sScore?: number; // camelCase 대응
 };
 
 export default function CharacterTable({
     rows,
     onSelect,
-    honeyIds,
 }: {
     rows: CharacterSummary[];
     onSelect: (char_id: number, weapon_id: number) => void;
-    honeyIds?: number[] | Set<number>;
 }) {
     const [sortKey, setSortKey] = useState<SortKey>("tier");
-    const [sortDir, setSortDir] = useState<SortDir>("asc");
+    const [sortDir, setSortDir] = useState<SortDir>("desc"); // s_score 내림차순 기본
 
     const hasSurvival = useMemo(
         () => rows.some((r) => r.survivalTime != null),
@@ -49,18 +48,28 @@ export default function CharacterTable({
         return hasSurvival ? [...base, "survivalTime"] : base;
     }, [hasSurvival]);
 
-    const honeySet = useMemo(() => {
-        if (honeyIds instanceof Set) return honeyIds;
-        if (Array.isArray(honeyIds)) return new Set(honeyIds);
-        const internal = computeHoneySet(rows, 3)?.ids;
-        if (internal instanceof Set) return internal;
-        return new Set(internal ?? []);
-    }, [honeyIds, rows]);
+    // s_score 접근 헬퍼
+    const scoreOf = (r: CharacterSummary) =>
+        (r as RowLike).s_score ?? (r as RowLike).sScore ?? 0;
 
-    const sorted = useMemo(
-        () => sortRows(rows, sortKey, sortDir),
-        [rows, sortKey, sortDir],
-    );
+    // ✅ Honey 규칙(소수 기준: 0.15=15%)
+    const HONEY_RULE = { win: 0.15, pick: 0.02, mmr: 65 };
+    const isRuleHoney = (r: CharacterSummary) =>
+        r.winRate >= HONEY_RULE.win &&
+        r.pickRate >= HONEY_RULE.pick &&
+        r.mmrGain >= HONEY_RULE.mmr;
+
+    // ✅ 티어 컬럼 클릭 시 s_score로 정렬(표시는 tier)
+    const sorted = useMemo(() => {
+        if (sortKey === "tier") {
+            return [...rows].sort((a, b) =>
+                sortDir === "asc"
+                    ? scoreOf(a) - scoreOf(b)
+                    : scoreOf(b) - scoreOf(a),
+            );
+        }
+        return sortRows(rows, sortKey, sortDir);
+    }, [rows, sortKey, sortDir]);
 
     const labelFor = (col: SortKey) =>
         col === "tier"
@@ -123,10 +132,12 @@ export default function CharacterTable({
                 <tbody className="bg-surface">
                     {sorted.map((r, i) => {
                         const row = r as RowLike;
-                        const charId = row.characterId ?? r.id; // fallback
+                        const charId = row.characterId ?? r.id;
                         const weaponId = row.weaponId;
                         const key = `${charId}-${weaponId ?? r.weapon}-${i}`;
                         const sec = parseDurationToSec(r.survivalTime as any);
+
+                        const showHoney = isRuleHoney(r); // ✅ 규칙만 사용
 
                         return (
                             <tr
@@ -148,10 +159,7 @@ export default function CharacterTable({
                                 <td className="whitespace-nowrap px-3 py-2">
                                     <div className="flex items-center gap-1">
                                         <TierPill tier={r.tier} />
-                                        {(honeySet.has(charId) ||
-                                            honeySet.has(r.id)) && (
-                                            <HoneyBadge title="상위 10% (대표무기 기준)" />
-                                        )}
+                                        {showHoney && <HoneyBadge />}
                                     </div>
                                 </td>
 

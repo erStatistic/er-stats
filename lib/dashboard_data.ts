@@ -43,29 +43,77 @@ export async function fetchLatestPatch(): Promise<PatchNote> {
     };
 }
 
+export async function fetchJSON<T>(
+    url: string,
+    init?: RequestInit,
+): Promise<T> {
+    const res = await fetch(url, { cache: "no-store", ...init });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+export async function getCharacter(
+    id: number,
+): Promise<ServerCharacter | null> {
+    const base = process.env.API_BASE_URL!;
+    const j = await fetchJSON<any>(`${base}/api/v1/characters/${id}`);
+    if (j?.code === 404 || !j?.data) return null;
+    const d = j.data;
+    return {
+        id: d.ID ?? d.id,
+        nameKr: d.name_kr ?? "이름 없음",
+        imageUrlMini: (d.image_url_mini ?? "").trim(),
+        imageUrlFull: (d.image_url_full ?? "").trim(),
+    };
+}
+
 export async function fetchTopCharacters(
     count = 5,
 ): Promise<CharacterSummary[]> {
-    const rng = mulberry32(20250821);
-    const rows: CharacterSummary[] = [];
-    for (let i = 0; i < count; i++) {
-        const id = i + 1;
-        const win = 0.45 + rng() * 0.15; // 45~60%
-        const pick = 0.02 + rng() * 0.1; // 2~12%
-        const mmr = 5 + rng() * 10; // 5~15
-        rows.push({
-            id,
-            name: CHAR_NAMES[id - 1],
-            weapon: ["Axe", "Pistol", "Bow", "Rapier", "Spear"][i % 5],
-            winRate: win,
-            pickRate: pick,
-            mmrGain: mmr,
-            tier: ["S", "A", "A", "B", "S"][i % 5],
-            imageUrl: CHAR_IMG(id),
-            // (선택) 랭크 티어가 있다면: rankTier: "Diamond+"
-        } as any);
+    try {
+        const base = process.env.API_BASE_URL ?? "";
+        const url = (base ? `${base}` : "") + `/api/v1/analytics/cw/top5`;
+
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = await res.json();
+        const rows = (json?.data as any[]) ?? [];
+        const top = rows.slice(0, count);
+
+        const ids = Array.from(new Set<number>(top.map((r) => r.character_id)));
+
+        const characters = await Promise.all(
+            ids.map(async (id) => {
+                try {
+                    return await getCharacter(id);
+                } catch {
+                    return null;
+                }
+            }),
+        );
+        console.log("characters", characters);
+
+        const imgMap = new Map<number, string>();
+        for (const c of characters) {
+            if (!c) continue;
+            imgMap.set(c.id, c.imageUrlMini || "");
+        }
+
+        return top.map((r) => ({
+            id: r.character_id,
+            name: r.character_name_kr,
+            weapon: r.weapon_name_kr,
+            winRate: r.win_rate, // 0~1
+            pickRate: r.pick_rate, // 0~1
+            mmrGain: r.avg_mmr,
+            tier: r.tier,
+            imageUrl: imgMap.get(r.character_id) ?? "",
+        }));
+    } catch (e) {
+        console.error("fetchTopCharacters failed:", e);
+        return [];
     }
-    return rows;
 }
 
 export async function fetchPopularComps(count = 3): Promise<CompSummary[]> {
