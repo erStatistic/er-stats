@@ -8,6 +8,7 @@ import ClusterCompCard from "./ClusterCompCard";
 import { formatDuration } from "@/lib/stats";
 import { PATCHES, GAME_TIERS } from "@/features";
 import { SortKey } from "@/features/cluster-comps";
+import ClusterPreviewRail from "@/features/cluster-comps/components/ClusterPreviewRail";
 
 export default function ClusterCompsClient({
     initial,
@@ -19,6 +20,12 @@ export default function ClusterCompsClient({
     const [tier, setTier] = useState<GameTier>("All");
     const [sort, setSort] = useState<SortKey>("winRate");
 
+    // 사이드 미리보기 상태
+    const [previewClusters, setPreviewClusters] = useState<string[] | null>(
+        null,
+    ); // hover
+    const [pinnedClusters, setPinnedClusters] = useState<string[] | null>(null); // click 고정
+
     // Top3 (전체 기준)
     const topOverall = useMemo(() => {
         const arr = [...initial];
@@ -26,7 +33,7 @@ export default function ClusterCompsClient({
         return arr.slice(0, Math.min(3, arr.length));
     }, [initial]);
 
-    // ✅ Top3의 최대값(승률/픽률/평균MMR/게임수) 계산 → 진행바 스케일링에 사용
+    // 진행바 최대값(Top3 기준)
     const topMax = useMemo(() => {
         if (topOverall.length === 0) {
             return { winRate: 1, pickRate: 1, mmr: 1, games: 1 };
@@ -83,7 +90,7 @@ export default function ClusterCompsClient({
     }, [filtered, sort]);
 
     return (
-        <div className="text-app">
+        <div className="text-app relative">
             {/* Top3 캐러셀 — 전체 기준 (필터 무시) */}
             {topOverall.length > 0 && (
                 <>
@@ -102,7 +109,6 @@ export default function ClusterCompsClient({
                     >
                         {topOverall.map((s, i) => (
                             <ClusterCompCard key={i} s={s} max={topMax} />
-                            //             └─ ✅ 진행바 최대값 전달
                         ))}
                     </Carousel>
                 </>
@@ -155,8 +161,8 @@ export default function ClusterCompsClient({
                 </select>
             </div>
 
+            {/* 표 */}
             <div className="card p-0">
-                {/* 표 영역 */}
                 <div className="max-h-[60vh] overflow-auto overflow-x-auto">
                     <table className="min-w-[720px] w-full text-sm">
                         <thead className="bg-muted sticky top-0 z-10">
@@ -185,7 +191,24 @@ export default function ClusterCompsClient({
                             {sorted.map((s, i) => (
                                 <tr
                                     key={i}
-                                    className="border-t border-app hover:bg-elev-5 transition-colors"
+                                    className="border-t border-app hover:bg-elev-5 transition-colors cursor-pointer"
+                                    onMouseEnter={() =>
+                                        !pinnedClusters &&
+                                        setPreviewClusters(s.clusters)
+                                    }
+                                    onMouseLeave={() =>
+                                        !pinnedClusters &&
+                                        setPreviewClusters(null)
+                                    }
+                                    onClick={() =>
+                                        setPinnedClusters((cur) =>
+                                            cur &&
+                                            cur.join() === s.clusters.join()
+                                                ? null
+                                                : s.clusters,
+                                        )
+                                    }
+                                    title="클릭하면 우측 미리보기를 고정/해제합니다"
                                 >
                                     <td className="px-3 py-2">
                                         <span className="inline-flex gap-1">
@@ -237,6 +260,23 @@ export default function ClusterCompsClient({
                     </table>
                 </div>
             </div>
+
+            {/* 🔒 클릭 고정 > 우선, 아니면 hover 프리뷰 > 아니면 Top #1 기본 표시 */}
+            <ClusterPreviewRail
+                side="right"
+                clusters={
+                    pinnedClusters ??
+                    previewClusters ??
+                    topOverall[0]?.clusters ??
+                    null
+                }
+                containerMax={1152} // 본문 max-w(px)에 맞춰 조정 (max-w-6xl ≈ 1152)
+                top={96} // 네비 높이에 맞춰 여백
+                width={280}
+                gap={16}
+                hideBelow={1536} // 2xl 미만에서는 숨김
+                title="클러스터 미리보기"
+            />
         </div>
     );
 }
