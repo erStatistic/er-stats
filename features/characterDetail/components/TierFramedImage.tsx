@@ -53,7 +53,6 @@ export default function TierFramedImage({ ...props }) {
                 className={`relative w-full h-full overflow-hidden ${rcls[radius]} ${bgClassName}`}
                 style={{ contain: "layout paint" }} // 스택/포지셔닝 안정화(옵션)
             >
-                {/* 이미지: fill은 이 relative 박스 기준으로 꽉 채움 */}
                 <Image
                     src={src}
                     alt={alt}
@@ -72,7 +71,6 @@ export default function TierFramedImage({ ...props }) {
                     aria-hidden
                 />
 
-                {/* 배지: 같은 relative 박스 기준으로 고정됨 */}
                 {showBadge && (
                     <div className={`absolute z-20 ${cornerCls}`}>
                         <span

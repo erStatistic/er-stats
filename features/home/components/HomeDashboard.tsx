@@ -1,4 +1,3 @@
-// components/HomeDashboard.tsx
 "use client";
 
 import Link from "next/link";
@@ -6,6 +5,10 @@ import Carousel from "@/features/ui/Carousel";
 import CompCard from "./CompCard";
 import { CharacterSummary, CompSummary, PatchNote } from "@/types";
 import { formatPercent } from "@/lib/stats";
+
+function pick<T>(obj: any, a: keyof any, b: keyof any, def: T): T {
+    return (obj?.[a] ?? obj?.[b] ?? def) as T;
+}
 
 export default function HomeDashboard({
     latestPatch,
@@ -16,6 +19,30 @@ export default function HomeDashboard({
     topChars: CharacterSummary[];
     popularComps: CompSummary[];
 }) {
+    // ── 인기 조합들 사이의 상대 비교용 스케일(최댓값) 계산
+    const scale = popularComps.reduce(
+        (acc, c) => {
+            acc.maxWin = Math.max(
+                acc.maxWin,
+                pick<number>(c, "win_rate", "winRate", 0),
+            );
+            acc.maxPick = Math.max(
+                acc.maxPick,
+                pick<number>(c, "pick_rate", "pickRate", 0),
+            );
+            acc.maxMmr = Math.max(
+                acc.maxMmr,
+                pick<number>(c, "avg_mmr", "mmrGain", 0),
+            );
+            acc.maxCount = Math.max(
+                acc.maxCount,
+                pick<number>(c, "samples", "count", 0),
+            );
+            return acc;
+        },
+        { maxWin: 0, maxPick: 0, maxMmr: 0, maxCount: 0 },
+    );
+
     return (
         <div className="space-y-8">
             {/* 1) 최신 패치 하이라이트 */}
@@ -86,7 +113,7 @@ export default function HomeDashboard({
                 </div>
             </section>
 
-            {/* 2) Top 캐릭터 5 (간단 카드 스트립) */}
+            {/* 2) Top 캐릭터 5 */}
             <section>
                 <div className="mb-3 flex items-center justify-between">
                     <h2 className="text-lg font-bold text-app">Top 캐릭터</h2>
@@ -170,8 +197,11 @@ export default function HomeDashboard({
                             <div className="rounded-2xl overflow-hidden border border-app bg-surface focus-within:outline-none">
                                 <CompCard
                                     comp={comp}
-                                    characters={topChars}
+                                    characters={
+                                        topChars /* 프리뷰용 – 실제에선 전체 캐릭터 map 전달 */
+                                    }
                                     title={`Top 조합 #${idx + 1}`}
+                                    scale={scale}
                                 />
                             </div>
                         </div>

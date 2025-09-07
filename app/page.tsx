@@ -15,8 +15,6 @@ export default async function HomePage() {
         fetchPopularComps(3),
     ]);
 
-    for (const c of popularComps) console.log(c.members);
-
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
             <HomeDashboard

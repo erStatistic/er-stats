@@ -200,7 +200,7 @@ export async function fetchPopularComps(
         pickRate: row.pick_rate,
         // 카드에 7.2처럼 보이게 하려면 k 단위로 변환(7,200 → 7.2)
         // 그냥 원시 MMR(7,5xx)을 쓰고 싶다면 /1000 제거
-        mmrGain: row.avg_mmr / 1000,
+        mmrGain: row.avg_mmr,
         count: row.samples,
         members: row.members?.map((m) => ({
             id: m.cw_id,

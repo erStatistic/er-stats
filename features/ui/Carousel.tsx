@@ -135,7 +135,7 @@ export default function Carousel({
 
     return (
         <div
-            className={`relative w-full overflow-hidden py-6 select-none ${className}`}
+            className={`relative z-0 isolate w-full overflow-hidden py-6 select-none ${className}`}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}

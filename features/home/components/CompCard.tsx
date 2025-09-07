@@ -1,11 +1,10 @@
-// features/home/components/CompCard.tsx
 "use client";
 
 import React from "react";
 import { CompSummary, CharacterSummary } from "@/types";
 import StatBlock from "./StatBlock";
 
-// 네트워크 404 방지용 아주 작은 SVG 아바타
+// 아주 작은 SVG 폴백
 const FALLBACK_AVATAR =
     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="48" fill="%23232a3a"/><circle cx="48" cy="40" r="18" fill="%23354463"/><rect x="22" y="62" width="52" height="22" rx="11" fill="%23354463"/></svg>';
 
@@ -16,7 +15,6 @@ type MemberView = {
     weaponSrc?: string;
 };
 
-// 이미지 에러 시 즉석 폴백 적용(리렌더 불필요)
 function safeImgOnError(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
     if (img.src !== FALLBACK_AVATAR) img.src = FALLBACK_AVATAR;
@@ -83,7 +81,6 @@ function pickFirst<T>(...vals: (T | null | undefined)[]) {
     return undefined;
 }
 
-// API( /popular-comps )의 members 를 우선 사용하고, 없으면 fallback(topChars) 사용
 function toMembers(
     comp: CompSummary | any,
     characters: CharacterSummary[],
@@ -94,12 +91,16 @@ function toMembers(
             name:
                 pickFirst<string>(m.character_name_kr, m.nameKr, m.name) ??
                 "#undefined",
-            charSrc: pickFirst<string>(m.image, m.charSrc) ?? FALLBACK_AVATAR,
-            weaponSrc: pickFirst<string>(m.weaponImage, m.weaponSrc),
+            charSrc:
+                pickFirst<string>(m.image_url_mini, m.image, m.charSrc) ??
+                FALLBACK_AVATAR,
+            weaponSrc: pickFirst<string>(
+                m.weapon_image_url,
+                m.weaponImage,
+                m.weaponSrc,
+            ),
         }));
     }
-
-    // 구형 CompSummary: comp.comp 에 id[]만 있는 경우
     if (Array.isArray(comp?.comp)) {
         return comp.comp.slice(0, 3).map((id: number, i: number) => {
             const c = characters.find((x) => x.id === id);
@@ -111,30 +112,56 @@ function toMembers(
             };
         });
     }
-
     return [];
 }
 
+type Scale = {
+    maxWin: number;
+    maxPick: number;
+    maxMmr: number;
+    maxCount: number;
+};
+
 interface CompCardProps {
-    comp: CompSummary | any; // /popular-comps 응답 or 기존 CompSummary
+    comp: CompSummary | any;
     characters: CharacterSummary[];
     title?: string;
+    /** 인기 조합 묶음에서 계산한 최댓값들(상대 비교용) */
+    scale?: Scale;
 }
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+/** 막대가 너무 안 보이지 않도록 최소 길이(floor) 적용 */
+const withFloor = (v: number, floor = 0.06) =>
+    v <= 0 ? 0 : Math.max(floor, v);
 
 export default function CompCard({
     comp,
     characters,
     title = "Top Team",
+    scale,
 }: CompCardProps) {
     const members = toMembers(comp, characters);
-    console.log("Test");
-    console.log(members);
 
     // 지표 이름 매핑(신/구 포맷 모두 허용)
     const winRate = pickFirst<number>(comp.win_rate, comp.winRate) ?? 0;
     const pickRate = pickFirst<number>(comp.pick_rate, comp.pickRate) ?? 0;
     const mmr = pickFirst<number>(comp.avg_mmr, comp.mmrGain) ?? 0;
     const count = pickFirst<number>(comp.samples, comp.count) ?? 0;
+
+    // 상대 비교(최댓값 대비 정규화)
+    const nWin = withFloor(
+        clamp01(scale?.maxWin ? winRate / scale.maxWin : winRate),
+    );
+    const nPick = withFloor(
+        clamp01(scale?.maxPick ? pickRate / scale.maxPick : pickRate),
+    );
+    const nMmr = withFloor(
+        clamp01(scale?.maxMmr ? mmr / scale.maxMmr : mmr / 20),
+    ); // 이전 로직 /20 폴백
+    const nCnt = withFloor(
+        clamp01(scale?.maxCount ? count / scale.maxCount : count / 500),
+    ); // 이전 로직 /500 폴백
 
     return (
         <article
@@ -181,25 +208,25 @@ export default function CompCard({
                 <StatBlock
                     label="승률"
                     value={`${(winRate * 100).toFixed(1)}%`}
-                    barValue={winRate}
+                    barValue={nWin}
                     barClass="bg-green-500"
                 />
                 <StatBlock
                     label="픽률"
                     value={`${(pickRate * 100).toFixed(2)}%`}
-                    barValue={pickRate}
+                    barValue={nPick}
                     barClass="bg-blue-500"
                 />
                 <StatBlock
                     label="평균 MMR"
                     value={mmr.toFixed(1)}
-                    barValue={Math.max(0, Math.min(1, mmr / 20))}
+                    barValue={nMmr}
                     barClass="bg-purple-500"
                 />
                 <StatBlock
                     label="게임 수"
                     value={count.toLocaleString()}
-                    barValue={Math.max(0, Math.min(1, count / 500))}
+                    barValue={nCnt}
                     barClass="bg-amber-400"
                 />
             </section>
