@@ -7,7 +7,6 @@ import CharacterWeaponPicker, { CharItem } from "./CharacterWeaponPicker";
 import { useEffect, useMemo, useState } from "react";
 
 /* ============== API 유틸 ============== */
-/** 예: NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080" (꼭 슬래시 제거) */
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
 const HAS_PREFIX = RAW_BASE.endsWith("/api/v1");
 const API = (p: string) =>
@@ -24,16 +23,64 @@ async function fetchJSON<T>(path: string): Promise<T> {
     return (j?.data ?? j) as T;
 }
 
+/* ============== 초성 검색 유틸 ============== */
+const CHO = [
+    "ㄱ",
+    "ㄲ",
+    "ㄴ",
+    "ㄷ",
+    "ㄸ",
+    "ㄹ",
+    "ㅁ",
+    "ㅂ",
+    "ㅃ",
+    "ㅅ",
+    "ㅆ",
+    "ㅇ",
+    "ㅈ",
+    "ㅉ",
+    "ㅊ",
+    "ㅋ",
+    "ㅌ",
+    "ㅍ",
+    "ㅎ",
+] as const;
+const CHO_SET = new Set(CHO);
+
+/** 문자열에서 한글 음절의 초성만 추출하여 이어붙임(공백 제거) */
+function toChosung(str: string): string {
+    let out = "";
+    for (const ch of (str || "").replace(/\s+/g, "")) {
+        const code = ch.codePointAt(0)!;
+        if (code >= 0xac00 && code <= 0xd7a3) {
+            const idx = Math.floor((code - 0xac00) / 588);
+            out += CHO[idx] ?? "";
+        } else if (CHO_SET.has(ch as any)) {
+            out += ch; // 이미 초성(ㄱ, ㄲ …)이면 그대로
+        }
+    }
+    return out;
+}
+
+/** 쿼리가 '초성만'으로 이루어졌는지 판별 */
+function isChosungQuery(q: string): boolean {
+    const t = (q || "").replace(/\s+/g, "");
+    if (!t) return false;
+    for (const ch of t) {
+        if (!CHO_SET.has(ch as any)) return false;
+    }
+    return true;
+}
+
 /* ============== 타입 ============== */
 type SelectedChar = {
     id: number;
     name: string;
     imageUrl: string;
     weapon?: string;
-    cwId?: number; // 선택된 무기(있으면 바로 사용)
+    cwId?: number;
 };
 
-/** 백엔드 실제 응답 스키마 */
 type CompMetricsBoth = {
     by_cw?: {
         cw_ids: number[];
@@ -56,7 +103,6 @@ type CompMetricsBoth = {
     };
 };
 
-/** 프론트에서 쓰기 쉬운 평평한 타입 */
 type CompMetricResp = {
     samples: number;
     wins: number;
@@ -72,7 +118,6 @@ function toNum(x: any): number {
     return Number.isFinite(n) ? n : 0;
 }
 
-/** 선택된 cw 3개로 조합 지표 조회 (정규화) */
 async function fetchCompMetrics(
     cwIds: number[],
     opts?: { start?: string; end?: string; tier?: string; minSamples?: number },
@@ -87,11 +132,9 @@ async function fetchCompMetrics(
         cache: "no-store",
         body: JSON.stringify({
             cw: cwIds,
-            // 백엔드가 포인터(nil) + 역참조를 쓰므로 null 대신 빈 문자열 권장
             start: opts?.start ?? "",
             end: opts?.end ?? "",
             tier: opts?.tier ?? "",
-            // 멀티 서제스트는 최소샘플 기준을 두지 않으므로 1로
             minSamples: opts?.minSamples ?? 1,
         }),
     });
@@ -121,7 +164,6 @@ async function fetchCompMetrics(
     };
 }
 
-/** cw 단위 성능행 (GetCwStats 결과와 호환) */
 type CwStatRow = {
     cw_id: number;
     character_id: number;
@@ -178,16 +220,40 @@ export default function UserMultiSuggestClient() {
         })();
     }, []);
 
-    /* ---------- Character 탭 ---------- */
+    /* ---------- 검색용 전처리(소문자/초성) ---------- */
+    type CatalogItem = CharItem & { _lower: string; _cho: string };
+    const catalog: CatalogItem[] = useMemo(
+        () =>
+            characters.map((c) => ({
+                ...c,
+                _lower: (c.name || "").toLowerCase(),
+                _cho: toChosung(c.name || ""),
+            })),
+        [characters],
+    );
+
+    /* ---------- Character 탭(초성 검색 지원) ---------- */
     const filteredChars = useMemo(() => {
-        const term = charQ.trim().toLowerCase();
+        const term = (charQ || "").trim();
+        const termLower = term.toLowerCase();
+        const termCho = toChosung(term);
+        const choOnly = isChosungQuery(term);
         const selectedIds = new Set(selectedChars.map((c) => c.id));
-        return characters.filter(
-            (c) =>
-                !selectedIds.has(c.id) &&
-                (!term || c.name.toLowerCase().includes(term)),
-        );
-    }, [charQ, characters, selectedChars]);
+
+        return catalog.filter((c) => {
+            if (selectedIds.has(c.id)) return false;
+            if (!term) return true;
+
+            // 초성만 입력한 경우: 초성 기준 포함 여부
+            if (choOnly) return c._cho.includes(termCho);
+
+            // 일반 검색 + 초성 보조 검색
+            return (
+                c._lower.includes(termLower) ||
+                (!!termCho && c._cho.includes(termCho))
+            );
+        });
+    }, [charQ, catalog, selectedChars]);
 
     const openPickerFor = (c: CharItem) => {
         if (selectedChars.length >= 3)
@@ -196,7 +262,7 @@ export default function UserMultiSuggestClient() {
         setPickerOpen(true);
     };
 
-    /** 무기 선택 콜백: CharacterWeaponPicker 가 `cwId`를 함께 넘김 */
+    /** 무기 선택 콜백 */
     const pickWeapon = (id: number, weaponLabel: string, cwId: number) => {
         const c = characters.find((x) => x.id === id);
         if (!c) return;
@@ -246,9 +312,7 @@ export default function UserMultiSuggestClient() {
                         fromSolo: 0,
                         fromCluster: 1,
                     },
-                    note: `samples: ${m.samples}${
-                        m.source === "cluster" ? " (cluster agg)" : ""
-                    }`,
+                    note: `samples: ${m.samples}${m.source === "cluster" ? " (cluster agg)" : ""}`,
                 });
             } catch {
                 setMeasured(null);
@@ -261,7 +325,6 @@ export default function UserMultiSuggestClient() {
     /* ---------- ② DB 기반 추천(선택 캐릭 ≥ 3) ---------- */
     const [suggestions, setSuggestions] = useState<CompSuggestion[]>([]);
     const [suggestLoading, setSuggestLoading] = useState(false);
-    // cwId -> "캐릭 (무기)" 라벨러
     const [cwNameById, setCwNameById] = useState<(id: number) => string>(
         () => (id) => `CW ${id}`,
     );
@@ -275,7 +338,6 @@ export default function UserMultiSuggestClient() {
         (async () => {
             setSuggestLoading(true);
             try {
-                // 1) 후보 추출용 cw 통계 (최소샘플 제한 없이 1로)
                 const rows = await fetchCwStats({ minSamples: 1 });
 
                 const TOP_K = 3;
@@ -312,7 +374,6 @@ export default function UserMultiSuggestClient() {
                     candidates.push(ids);
                 }
 
-                // 2) 후보 교차곱 조합
                 const combos: number[][] = [];
                 const LIMIT = 24;
                 const [A, B, C] = candidates;
@@ -323,14 +384,12 @@ export default function UserMultiSuggestClient() {
                             combos.push([a, b, c]);
                         }
 
-                // 3) 각 조합 메트릭 호출 (최소샘플 1) + 정규화 사용
                 const results = await Promise.allSettled(
                     combos.map((ids) =>
                         fetchCompMetrics(ids, { minSamples: 1 }),
                     ),
                 );
 
-                // 샘플 0도 카드로 표기
                 const out: CompSuggestion[] = results.map((res, i) => {
                     const m = res.status === "fulfilled" ? res.value : null;
                     return {
@@ -344,9 +403,7 @@ export default function UserMultiSuggestClient() {
                             fromSolo: 0,
                             fromCluster: 1,
                         },
-                        note: `samples: ${m?.samples ?? 0}${
-                            m?.source === "cluster" ? " (cluster agg)" : ""
-                        }`,
+                        note: `samples: ${m?.samples ?? 0}${m?.source === "cluster" ? " (cluster agg)" : ""}`,
                     };
                 });
 
@@ -442,7 +499,7 @@ export default function UserMultiSuggestClient() {
                                 borderColor: "var(--border)",
                                 background: "var(--surface)",
                             }}
-                            placeholder="Search characters"
+                            placeholder="Search characters (초성도 가능: ㅇㄹㅂ)"
                             value={charQ}
                             onChange={(e) => setCharQ(e.target.value)}
                         />
@@ -470,7 +527,7 @@ export default function UserMultiSuggestClient() {
                     </div>
                 </details>
 
-                {/* ✅ DB 기반 추천 조합 (샘플 0도 카드 표시) */}
+                {/* 추천 조합 */}
                 {selectedChars.length >= 3 && (
                     <>
                         <div
@@ -481,24 +538,15 @@ export default function UserMultiSuggestClient() {
                             selected
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {suggestLoading && (
-                                <div
-                                    className="card p-4 text-sm"
-                                    style={{ color: "var(--text-muted)" }}
-                                >
-                                    Loading suggestions…
-                                </div>
-                            )}
-                            {!suggestLoading &&
-                                suggestions.map((s, i) => (
-                                    <CompSuggestionCard
-                                        key={i}
-                                        s={s}
-                                        nameById={cwNameById}
-                                        badge="MEASURED"
-                                    />
-                                ))}
-                            {!suggestLoading && suggestions.length === 0 && (
+                            {suggestions.map((s, i) => (
+                                <CompSuggestionCard
+                                    key={i}
+                                    s={s}
+                                    nameById={cwNameById}
+                                    badge="MEASURED"
+                                />
+                            ))}
+                            {suggestions.length === 0 && (
                                 <div
                                     className="card p-4 text-sm"
                                     style={{ color: "var(--text-muted)" }}
