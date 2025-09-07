@@ -77,12 +77,13 @@ export default async function ClusterCompsPage({
         offset?: string;
     };
 }) {
-    const tier = searchParams?.tier ?? "All";
-    const minSamples = Number.isNaN(Number(searchParams?.minSamples))
+    const sp = await searchParams;
+    const tier = sp.tier ?? "All";
+    const minSamples = Number.isNaN(Number(sp.minSamples))
         ? 1000
-        : Number(searchParams?.minSamples ?? 1000);
-    const limit = Number(searchParams?.limit ?? 1000);
-    const offset = Number(searchParams?.offset ?? 0);
+        : Number(sp.minSamples ?? 1000);
+    const limit = Number(sp.limit ?? 1000);
+    const offset = Number(sp.offset ?? 0);
 
     const initial = await fetchClusterCombos({
         tier,
