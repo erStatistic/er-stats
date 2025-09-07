@@ -1,8 +1,7 @@
 "use client";
 import { Copy, Check } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import TierPill from "@/features/ui/TierPill";
 import VariantPill from "@/features/ui/VariantPill";
 import { Build, TeamComp, CharacterSummary, Role } from "@/types";
 import { formatMMR, formatPercent, formatDuration } from "@/lib/stats";
@@ -10,9 +9,7 @@ import { mockBuildsFor, mockTeamsFor } from "@/lib/mock";
 import ServerCharacter from "@/features/characterDetail/types";
 import TierFramedImage from "@/features/characterDetail/components/TierFramedImage";
 import RadarChart from "@/features/characterDetail/components/RadarChart";
-import StatLine from "@/features/characterDetail/components/StatLine";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
-import { makeTrendSeriesPct } from "@/features/characterDetail/utils";
 import KpiCard from "@/features/characterDetail/components/KpiCard";
 import ClusterBadge from "@/features/cluster-dict/components/ClusterBadge";
 import RolePill from "@/features/ui/RolePill";
@@ -32,7 +29,6 @@ type OverviewBox = {
         survivalSec?: number;
     };
     stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
-    // 선택: routes 등 추가 필드가 있을 수 있음
     routes?: Array<{ id: number; title?: string }>;
 };
 
@@ -51,20 +47,28 @@ type CwOverview =
           overview: OverviewBox;
       };
 
+// API 응답 타입
+type TrendRow = {
+    day: string; // "YYYY-MM-DD"
+    samples: number;
+    win_rate: number; // 0~1
+    pick_rate: number; // 0~1
+};
+
 export default function CharacterDetailClient({
     initial,
 }: {
     initial: {
         r: CharacterSummary; // tier만 사용
-        variants: VariantItem[]; // 서버 제공
-        currentWeapon?: string; // 서버가 선택한 무기 문자열
+        variants: VariantItem[];
+        currentWeapon?: string;
         builds: Build[];
         teams: TeamComp[];
         character?: ServerCharacter & {
             imageUrlMini?: string;
             imageUrlFull?: string;
         };
-        overview?: CwOverview; // { ... , overview:{ summary, stats } }
+        overview?: CwOverview;
     };
 }) {
     const router = useRouter();
@@ -157,7 +161,6 @@ export default function CharacterDetailClient({
     }, [overview]);
 
     // 지표
-
     const winRate = ov?.summary?.winRate ?? 0;
     const pickRate = ov?.summary?.pickRate ?? 0;
     const mmrGain = ov?.summary?.mmrGain ?? 0;
@@ -184,16 +187,70 @@ export default function CharacterDetailClient({
         };
     }, [ov?.stats]);
 
-    // 추세(데모)
+    // --------- 🔻 트렌드: 데모 삭제, 실DB 연동 ----------
     const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
-    const winData = useMemo(
-        () => makeTrendSeriesPct(winRate ?? 0.5, `${selectedWeapon}-win`),
-        [winRate, selectedWeapon],
+    const [trendLoading, setTrendLoading] = useState(false);
+    const [trendWin, setTrendWin] = useState<Array<{ x: string; y: number }>>(
+        [],
     );
-    const pickData = useMemo(
-        () => makeTrendSeriesPct(pickRate ?? 0.035, `${selectedWeapon}-pick`),
-        [pickRate, selectedWeapon],
+    const [trendPick, setTrendPick] = useState<Array<{ x: string; y: number }>>(
+        [],
     );
+
+    // 현재 선택된 pill에서 cwId 추출
+    const selectedCwId = useMemo(() => {
+        const v = sortedVariants.find((v) => v.weapon === selectedWeapon);
+        return v?.cwId; // number | undefined
+    }, [sortedVariants, selectedWeapon]);
+
+    const fetchTrend = useCallback(async (cwId?: number) => {
+        if (!cwId) {
+            setTrendWin([]);
+            setTrendPick([]);
+            return;
+        }
+        setTrendLoading(true);
+        try {
+            const base =
+                process.env.NEXT_PUBLIC_API_BASE_URL ||
+                process.env.API_BASE_URL ||
+                "";
+            const url = `${base}/api/v1/analytics/cw/${cwId}/trend`;
+            const res = await fetch(url, {
+                cache: "no-store",
+                headers: { accept: "application/json" },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            const rows: TrendRow[] = Array.isArray(json?.data) ? json.data : [];
+
+            // 0~1 → % 로 변환, 라벨은 "MM-DD"
+            const toLabel = (s: string) => s.slice(5);
+            setTrendWin(
+                rows.map((r) => ({
+                    x: toLabel(r.day),
+                    y: Math.round(r.win_rate * 1000) / 10,
+                })),
+            );
+            setTrendPick(
+                rows.map((r) => ({
+                    x: toLabel(r.day),
+                    y: Math.round(r.pick_rate * 1000) / 10,
+                })),
+            );
+        } catch (e) {
+            console.error("trend fetch failed:", e);
+            setTrendWin([]);
+            setTrendPick([]);
+        } finally {
+            setTrendLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchTrend(selectedCwId);
+    }, [selectedCwId, fetchTrend]);
+    // ----------------------------------------------------
 
     // ✅ pill 클릭: wc=weaponId(=weaponCode)로 라우팅
     function goWeapon(v: VariantItem) {
@@ -229,8 +286,6 @@ export default function CharacterDetailClient({
             : Number.isFinite(v.weaponCode)
               ? `code-${v.weaponCode}-${i}`
               : `idx-${i}`;
-
-    const [copied, setCopied] = useState<number | null>(null);
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
@@ -352,18 +407,26 @@ export default function CharacterDetailClient({
                         </div>
                     </div>
                     <div className="flex-1 flex items-center">
-                        <MiniLineChart
-                            title={
-                                trendTab === "win" ? "Win Rate" : "Pick Rate"
-                            }
-                            data={trendTab === "win" ? winData : pickData}
-                            color={trendTab === "win" ? "#ef4444" : "#f59e0b"}
-                            yTickCount={5}
-                            suffix="%"
-                            decimals={1}
-                            width={340}
-                            height={170}
-                        />
+                        {trendLoading ? (
+                            <div className="w-full h-[170px] animate-pulse rounded-md bg-elev-5" />
+                        ) : (
+                            <MiniLineChart
+                                title={
+                                    trendTab === "win"
+                                        ? "Win Rate"
+                                        : "Pick Rate"
+                                }
+                                data={trendTab === "win" ? trendWin : trendPick}
+                                color={
+                                    trendTab === "win" ? "#ef4444" : "#f59e0b"
+                                }
+                                yTickCount={5}
+                                suffix="%"
+                                decimals={1}
+                                width={340}
+                                height={170}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

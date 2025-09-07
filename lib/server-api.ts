@@ -38,7 +38,6 @@ async function getCharacter(id: number): Promise<Character | null> {
 
     // ✅ 정규화 (대문자 → 소문자, null/빈문자 처리)
     const d = json.data;
-    console.log("[getCharacter] GET", `${base}/api/v1/characters/${id}`);
     return {
         id: d.ID,
         nameKr: d.NameKr,
@@ -66,7 +65,6 @@ export async function ssrGetCwDirectory(): Promise<CwDirectoryHeader[]> {
     const body = await res.json();
     const rows = (body?.data ?? body) as any[];
 
-    console.log(rows);
     // 정규화
     return rows.map((r) => ({
         clusterId: r.ClusterID ?? r.clusterId ?? r.id,

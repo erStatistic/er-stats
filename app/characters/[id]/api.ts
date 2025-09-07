@@ -37,7 +37,6 @@ async function getCharacter(id: number): Promise<Character | null> {
 
     // ✅ 정규화 (대문자 → 소문자, null/빈문자 처리)
     const d = json.data;
-    console.log("[getCharacter] GET", `${base}/api/v1/characters/${id}`);
     return {
         id: d.ID,
         nameKr: d.name_kr,

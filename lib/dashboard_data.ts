@@ -92,7 +92,6 @@ export async function fetchTopCharacters(
                 }
             }),
         );
-        console.log("characters", characters);
 
         const imgMap = new Map<number, string>();
         for (const c of characters) {
