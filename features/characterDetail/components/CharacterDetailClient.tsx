@@ -80,6 +80,64 @@ type UiTeamComp = TeamComp & {
     membersEx?: Array<{ id: number; name: string; img?: string }>;
 };
 
+function AvatarWithWeapon({
+    charSrc,
+    weaponSrc,
+    size = 56,
+    dot = 18,
+    onError,
+}: {
+    charSrc: string;
+    weaponSrc?: string;
+    size?: number;
+    dot?: number;
+    onError: (e: React.SyntheticEvent<HTMLImageElement>) => void;
+}) {
+    return (
+        <div
+            className="relative rounded-full border"
+            style={{
+                width: size,
+                height: size,
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+            }}
+        >
+            <img
+                src={charSrc}
+                alt=""
+                className="w-full h-full object-cover rounded-full"
+                onError={onError}
+            />
+            {weaponSrc && (
+                <div
+                    className="absolute right-0 bottom-0 rounded-full border-2 shadow"
+                    style={{
+                        width: dot,
+                        height: dot,
+                        backgroundColor: "#000",
+                        borderColor: "var(--surface)",
+                        display: "grid",
+                        placeItems: "center",
+                    }}
+                >
+                    <img
+                        src={weaponSrc}
+                        alt=""
+                        className="rounded-full"
+                        style={{
+                            width: Math.round(dot * 0.78),
+                            height: Math.round(dot * 0.78),
+                            objectFit: "contain",
+                        }}
+                        onError={onError}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function CharacterDetailClient({
     initial,
 }: {
@@ -614,9 +672,6 @@ export default function CharacterDetailClient({
                                         <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-app text-center">
                                             <div>
                                                 승률 {formatPercent(meta.win)}
-                                            </div>
-                                            <div>
-                                                픽률 {formatPercent(meta.pick)}
                                             </div>
                                             <div>
                                                 MMR {formatMMR(meta.mmr, 1)}

@@ -170,9 +170,7 @@ export default function HomeDashboard({
                             <div className="rounded-2xl overflow-hidden border border-app bg-surface focus-within:outline-none">
                                 <CompCard
                                     comp={comp}
-                                    characters={
-                                        topChars /* 프리뷰용 – 실제에선 전체 캐릭터 map 전달 */
-                                    }
+                                    characters={topChars}
                                     title={`Top 조합 #${idx + 1}`}
                                 />
                             </div>
