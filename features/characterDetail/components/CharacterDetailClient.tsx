@@ -14,6 +14,7 @@ import KpiCard from "@/features/characterDetail/components/KpiCard";
 import ClusterBadge from "@/features/cluster-dict/components/ClusterBadge";
 import RolePill from "@/features/ui/RolePill";
 
+// ---- API 타입들 ----
 type VariantItem = {
     cwId: number;
     weapon: string;
@@ -47,7 +48,6 @@ type CwOverview =
           overview: OverviewBox;
       };
 
-// API 응답 타입
 type TrendRow = {
     day: string; // "YYYY-MM-DD"
     samples: number;
@@ -55,11 +55,36 @@ type TrendRow = {
     pick_rate: number; // 0~1
 };
 
+type BestCompRow = {
+    comp_key: number[];
+    samples: number;
+    wins: number;
+    win_rate: number; // 0~1
+    pick_rate: number; // 0~1
+    avg_mmr: number;
+    avg_survival: number;
+    s_score: number;
+    members: Array<{
+        cw_id: number;
+        weapon_id: number;
+        character_id: number;
+        weapon_name_kr: string;
+        character_name_kr: string;
+        image_url_mini?: string | null;
+    }>;
+};
+
+// ---- UI 전용 타입(메타/이미지 포함) ----
+type UiTeamComp = TeamComp & {
+    meta?: { win: number; pick: number; mmr: number; samples: number };
+    membersEx?: Array<{ id: number; name: string; img?: string }>;
+};
+
 export default function CharacterDetailClient({
     initial,
 }: {
     initial: {
-        r: CharacterSummary; // tier만 사용
+        r: CharacterSummary;
         variants: VariantItem[];
         currentWeapon?: string;
         builds: Build[];
@@ -109,8 +134,9 @@ export default function CharacterDetailClient({
     const [builds, setBuilds] = useState<Build[]>(
         initBuilds ?? mockBuildsFor(displayId, selectedWeapon),
     );
-    const [teams, setTeams] = useState<TeamComp[]>(
-        initTeams ?? mockTeamsFor(displayId, selectedWeapon),
+    const [teams, setTeams] = useState<UiTeamComp[]>(
+        (initTeams as UiTeamComp[]) ??
+            (mockTeamsFor(displayId, selectedWeapon) as UiTeamComp[]),
     );
 
     // 의존성 안정화를 위한 키
@@ -143,11 +169,17 @@ export default function CharacterDetailClient({
             if (next && next !== selectedWeapon) {
                 setSelectedWeapon(next);
                 setBuilds(mockBuildsFor(displayId, next));
-                setTeams(mockTeamsFor(displayId, next));
+                setTeams(
+                    (initTeams as UiTeamComp[]) ??
+                        (mockTeamsFor(displayId, next) as UiTeamComp[]),
+                );
             } else if (!next && !selectedWeapon && first) {
                 setSelectedWeapon(first);
                 setBuilds(mockBuildsFor(displayId, first));
-                setTeams(mockTeamsFor(displayId, first));
+                setTeams(
+                    (initTeams as UiTeamComp[]) ??
+                        (mockTeamsFor(displayId, first) as UiTeamComp[]),
+                );
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,7 +219,7 @@ export default function CharacterDetailClient({
         };
     }, [ov?.stats]);
 
-    // --------- 🔻 트렌드: 데모 삭제, 실DB 연동 ----------
+    // --------- 🔻 트렌드(실 DB) ----------
     const [trendTab, setTrendTab] = useState<"win" | "pick">("win");
     const [trendLoading, setTrendLoading] = useState(false);
     const [trendWin, setTrendWin] = useState<Array<{ x: string; y: number }>>(
@@ -197,10 +229,9 @@ export default function CharacterDetailClient({
         [],
     );
 
-    // 현재 선택된 pill에서 cwId 추출
     const selectedCwId = useMemo(() => {
         const v = sortedVariants.find((v) => v.weapon === selectedWeapon);
-        return v?.cwId; // number | undefined
+        return v?.cwId;
     }, [sortedVariants, selectedWeapon]);
 
     const fetchTrend = useCallback(async (cwId?: number) => {
@@ -223,9 +254,7 @@ export default function CharacterDetailClient({
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json();
             const rows: TrendRow[] = Array.isArray(json?.data) ? json.data : [];
-
-            // 0~1 → % 로 변환, 라벨은 "MM-DD"
-            const toLabel = (s: string) => s.slice(5);
+            const toLabel = (s: string) => s.slice(5); // "MM-DD"
             setTrendWin(
                 rows.map((r) => ({
                     x: toLabel(r.day),
@@ -250,20 +279,96 @@ export default function CharacterDetailClient({
     useEffect(() => {
         fetchTrend(selectedCwId);
     }, [selectedCwId, fetchTrend]);
-    // ----------------------------------------------------
+    // --------------------------------------
+
+    // --------- 🔻 추천 팀 조합(실 DB) ----------
+    const [compsLoading, setCompsLoading] = useState(false);
+
+    const fetchBestComps = useCallback(
+        async (cwId?: number) => {
+            if (!cwId) return;
+
+            setCompsLoading(true);
+            try {
+                const base =
+                    process.env.NEXT_PUBLIC_API_BASE_URL ||
+                    process.env.API_BASE_URL ||
+                    "";
+                const url = `${base}/api/v1/analytics/cw/${cwId}/best-comps?limit=2&minSamples=20`;
+                const res = await fetch(url, {
+                    cache: "no-store",
+                    headers: { accept: "application/json" },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                const rows: BestCompRow[] = Array.isArray(json?.data)
+                    ? json.data
+                    : [];
+
+                const mapped: UiTeamComp[] = rows.map((row) => ({
+                    id: row.comp_key.join("-"),
+                    members: row.members.map((m) => ({
+                        id: m.cw_id,
+                        name: m.character_name_kr,
+                    })),
+                    membersEx: row.members.map((m) => ({
+                        id: m.cw_id,
+                        name: m.character_name_kr,
+                        img: m.image_url_mini || undefined,
+                    })),
+                    meta: {
+                        win: row.win_rate,
+                        pick: row.pick_rate,
+                        mmr: row.avg_mmr,
+                        samples: row.samples,
+                    },
+                }));
+
+                setTeams(mapped);
+            } catch (e) {
+                console.error("best-comps fetch failed:", e);
+                const mock = mockTeamsFor(
+                    displayId,
+                    selectedWeapon,
+                ) as UiTeamComp[];
+                setTeams(
+                    mock.map((t) => ({
+                        ...t,
+                        meta: { win: 0, pick: 0, mmr: 0, samples: 0 },
+                    })),
+                );
+            } finally {
+                setCompsLoading(false);
+            }
+        },
+        [displayId, selectedWeapon],
+    );
+
+    useEffect(() => {
+        fetchBestComps(selectedCwId);
+    }, [selectedCwId, fetchBestComps]);
+    // --------------------------------------
+
+    // ✅ 조합 존재 여부
+    const hasComps = useMemo(() => {
+        if (!teams || teams.length === 0) return false;
+        return teams.some(
+            (t) =>
+                ((t as UiTeamComp).membersEx?.length ?? 0) > 0 ||
+                (t.members?.length ?? 0) > 0,
+        );
+    }, [teams]);
 
     // ✅ pill 클릭: wc=weaponId(=weaponCode)로 라우팅
     function goWeapon(v: VariantItem) {
-        setSelectedWeapon(v.weapon); // 즉시 UI 반영
+        setSelectedWeapon(v.weapon);
         setBuilds(mockBuildsFor(displayId, v.weapon));
-        setTeams(mockTeamsFor(displayId, v.weapon));
-
         const code = Number.isFinite(v.weaponCode as number)
             ? Number(v.weaponCode)
             : undefined;
         const qs = code != null ? `?wc=${code}` : "";
         router.replace(`/characters/${displayId}${qs}`, { scroll: false });
-        router.refresh(); // 서버에서 overview/currentWeapon을 갱신하도록
+        router.refresh();
     }
 
     const positionName =
@@ -454,26 +559,74 @@ export default function CharacterDetailClient({
             <section>
                 <h2 className="text-lg font-semibold mb-2">추천 팀 조합</h2>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {teams.map((t) => (
-                        <div key={t.id} className="card p-4">
-                            <div className="font-medium text-app">
-                                {t.title}
-                            </div>
-                            <div className="text-xs text-muted-app mt-1">
-                                {t.note || "—"}
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-1 text-xs">
-                                {t.members.map((m) => (
-                                    <span
-                                        key={m.id}
-                                        className="muted-strip px-2 py-1"
-                                    >
-                                        {m.name}
-                                    </span>
-                                ))}
+                    {compsLoading && (
+                        <>
+                            <div className="card p-4 h-[140px] animate-pulse bg-elev-5" />
+                            <div className="card p-4 h-[140px] animate-pulse bg-elev-5" />
+                        </>
+                    )}
+
+                    {/* ✅ 빈 상태 카드 */}
+                    {!compsLoading && !hasComps && (
+                        <div className="card p-6 col-span-1 md:col-span-2 flex items-center justify-center">
+                            <div className="text-center">
+                                <div className="font-medium text-app">
+                                    추천 조합이 없습니다
+                                </div>
+                                <div className="text-xs text-muted-app mt-1">
+                                    최근 데이터 기준 조건을 만족하는 팀이
+                                    없어요.
+                                </div>
                             </div>
                         </div>
-                    ))}
+                    )}
+
+                    {/* ✅ 조합 카드 */}
+                    {!compsLoading &&
+                        hasComps &&
+                        teams.map((t) => {
+                            const meta = (t as UiTeamComp).meta;
+                            const ex = (t as UiTeamComp).membersEx;
+                            return (
+                                <div key={t.id} className="card p-4">
+                                    <div className="mt-3 flex items-center justify-center gap-6 sm:gap-8 md:gap-10">
+                                        {ex?.map((m) => (
+                                            <div
+                                                key={m.id}
+                                                className="flex flex-col items-center"
+                                            >
+                                                <img
+                                                    src={
+                                                        m.img ||
+                                                        `/chars/${m.id % 9 || 1}.png`
+                                                    }
+                                                    alt={m.name}
+                                                    className="w-12 h-12 rounded-full border border-app/30 object-cover"
+                                                    loading="lazy"
+                                                />
+                                                <div className="mt-1 text-xs text-app">
+                                                    {m.name}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {meta && (
+                                        <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-app text-center">
+                                            <div>
+                                                승률 {formatPercent(meta.win)}
+                                            </div>
+                                            <div>
+                                                픽률 {formatPercent(meta.pick)}
+                                            </div>
+                                            <div>
+                                                MMR {formatMMR(meta.mmr, 1)}
+                                            </div>
+                                            <div>표본 {meta.samples}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                 </div>
             </section>
         </div>
@@ -499,7 +652,6 @@ function CopyButton({ id }: { id: number }) {
                         const ta = document.createElement("textarea");
                         ta.value = text;
                         ta.style.position = "fixed";
-                        ta.style.left = "-9999px";
                         document.body.appendChild(ta);
                         ta.select();
                         document.execCommand("copy");
