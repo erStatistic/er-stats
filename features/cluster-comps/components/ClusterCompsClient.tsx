@@ -6,15 +6,20 @@ import Carousel from "@/features/ui/Carousel";
 import ClusterCompCard from "./ClusterCompCard";
 import { formatDuration } from "@/lib/stats";
 import { PATCHES, GAME_TIERS } from "@/features";
-import { SortKey } from "@/features/cluster-comps";
 import ClusterPreviewRail from "@/features/cluster-comps/components/ClusterPreviewRail";
 
-type TriadRef = {
-    ids: number[];
-    text: string; // "K · P · U"
-};
+/* ====== 정렬 타입 ====== */
+type SortKey =
+    | "clusters"
+    | "winRate"
+    | "pickRate"
+    | "mmrGain"
+    | "survivalTime"
+    | "count";
+type SortDir = "asc" | "desc";
 
-/** 라벨 글자 → 클러스터 숫자 ID (스키마에 맞게 필요시 조정) */
+/* ====== 라벨→ID 매핑 유틸 ====== */
+type TriadRef = { ids: number[]; text: string };
 const LETTER_TO_ID: Record<string, number> = {
     A: 1,
     B: 2,
@@ -57,11 +62,14 @@ export default function ClusterCompsClient({
     const [q, setQ] = useState("");
     const [patch, setPatch] = useState<Patch>("All");
     const [tier, setTier] = useState<GameTier>("All");
-    const [sort, setSort] = useState<SortKey>("winRate");
 
-    // ✅ 사이드 미리보기 상태 (숫자 IDs + 라벨 텍스트)
-    const [previewTriad, setPreviewTriad] = useState<TriadRef | null>(null); // hover
-    const [pinnedTriad, setPinnedTriad] = useState<TriadRef | null>(null); // click 고정
+    // ✅ 사이드 미리보기 상태
+    const [previewTriad, setPreviewTriad] = useState<TriadRef | null>(null);
+    const [pinnedTriad, setPinnedTriad] = useState<TriadRef | null>(null);
+
+    // ✅ 헤더 클릭 정렬 상태
+    const [sortKey, setSortKey] = useState<SortKey>("winRate");
+    const [sortDir, setSortDir] = useState<SortDir>("desc");
 
     // Top3 (전체 기준)
     const topOverall = useMemo(() => {
@@ -89,7 +97,7 @@ export default function ClusterCompsClient({
         };
     }, [topOverall]);
 
-    // 필터링
+    // 검색/필터
     const filtered = useMemo(() => {
         const qq = q.trim().toLowerCase();
         return initial
@@ -107,37 +115,9 @@ export default function ClusterCompsClient({
             });
     }, [initial, patch, tier, q]);
 
-    // 정렬
-    const sorted = useMemo(() => {
-        const c = [...filtered];
-        c.sort((a, b) => {
-            switch (sort) {
-                case "pickRate":
-                    return b.pickRate - a.pickRate;
-                case "mmrGain":
-                    return b.mmrGain - a.mmrGain;
-                case "count":
-                    return b.count - a.count;
-                case "survivalTime": {
-                    const na = a.survivalTime ?? -Infinity;
-                    const nb = b.survivalTime ?? -Infinity;
-                    return nb - na;
-                }
-                default:
-                    return b.winRate - a.winRate;
-            }
-        });
-        return c;
-    }, [filtered, sort]);
-
-    /** 행에서 TriadRef(ids+text) 만들기
-     *  1) s.clusterIds (camelCase) 우선 사용
-     *  2) 없으면 s["cluster_ids"] 사용
-     *  3) 그래도 없으면 라벨(clusters/cluster_label)에서 복구
-     */
+    // 행에서 TriadRef 만들기 (id 우선, 없으면 라벨에서 복구)
     const toTriadRef = (s: ClusterTriadSummary): TriadRef => {
         const any = s as any;
-
         const text = Array.isArray(s.clusters)
             ? s.clusters.join(" · ")
             : typeof any.cluster_label === "string"
@@ -157,14 +137,104 @@ export default function ClusterCompsClient({
         return { ids: Array.isArray(ids) ? ids : [], text };
     };
 
-    const sameTriad = (a: TriadRef | null, b: TriadRef | null) =>
-        !!a && !!b && a.ids.join(",") === b.ids.join(",");
-
-    // 기본(Top #1) 도 안전하게 준비
     const top1Triad = useMemo(
         () => (topOverall[0] ? toTriadRef(topOverall[0]) : null),
         [topOverall],
     );
+
+    // ====== 헤더 정렬 유틸 ======
+    const columns: SortKey[] = [
+        "clusters",
+        "winRate",
+        "pickRate",
+        "mmrGain",
+        "survivalTime",
+        "count",
+    ];
+
+    const labelFor = (col: SortKey) =>
+        col === "clusters"
+            ? "조합(Clusters)"
+            : col === "winRate"
+              ? "승률"
+              : col === "pickRate"
+                ? "픽률"
+                : col === "mmrGain"
+                  ? "평균 MMR"
+                  : col === "survivalTime"
+                    ? "평균 생존시간"
+                    : "게임 수";
+
+    const handleSortClick = (col: SortKey) => {
+        setSortDir((prev) =>
+            sortKey === col ? (prev === "asc" ? "desc" : "asc") : "desc",
+        );
+        setSortKey(col);
+    };
+
+    const ariaSort = (col: SortKey): "ascending" | "descending" | "none" =>
+        sortKey === col
+            ? sortDir === "asc"
+                ? "ascending"
+                : "descending"
+            : "none";
+
+    // 정렬
+    const sorted = useMemo(() => {
+        const arr = [...filtered];
+
+        const getLabelText = (s: ClusterTriadSummary) =>
+            Array.isArray(s.clusters)
+                ? s.clusters.join(" · ")
+                : String((s as any).cluster_label ?? "");
+
+        const num = (x: number | undefined | null, forAsc = false) =>
+            x == null
+                ? forAsc
+                    ? Number.POSITIVE_INFINITY
+                    : Number.NEGATIVE_INFINITY
+                : x;
+
+        arr.sort((a, b) => {
+            if (sortKey === "clusters") {
+                const la = getLabelText(a);
+                const lb = getLabelText(b);
+                const cmp = la.localeCompare(lb);
+                return sortDir === "asc" ? cmp : -cmp;
+            }
+
+            let av = 0,
+                bv = 0;
+            switch (sortKey) {
+                case "winRate":
+                    av = num(a.winRate, sortDir === "asc");
+                    bv = num(b.winRate, sortDir === "asc");
+                    break;
+                case "pickRate":
+                    av = num(a.pickRate, sortDir === "asc");
+                    bv = num(b.pickRate, sortDir === "asc");
+                    break;
+                case "mmrGain":
+                    av = num(a.mmrGain, sortDir === "asc");
+                    bv = num(b.mmrGain, sortDir === "asc");
+                    break;
+                case "survivalTime":
+                    av = num(a.survivalTime, sortDir === "asc");
+                    bv = num(b.survivalTime, sortDir === "asc");
+                    break;
+                case "count":
+                    av = num(a.count, sortDir === "asc");
+                    bv = num(b.count, sortDir === "asc");
+                    break;
+            }
+            return sortDir === "asc" ? av - bv : bv - av;
+        });
+
+        return arr;
+    }, [filtered, sortKey, sortDir]);
+
+    const sameTriad = (a: TriadRef | null, b: TriadRef | null) =>
+        !!a && !!b && a.ids.join(",") === b.ids.join(",");
 
     return (
         <div className="text-app relative">
@@ -191,7 +261,7 @@ export default function ClusterCompsClient({
                 </>
             )}
 
-            {/* 필터 바 */}
+            {/* 필터 바 — 정렬 셀렉트 제거 */}
             <div className="mt-6 mb-4 flex flex-wrap items-center gap-2">
                 <input
                     className="w-44 rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none placeholder:text-muted-app"
@@ -224,49 +294,51 @@ export default function ClusterCompsClient({
                         </option>
                     ))}
                 </select>
-                <select
-                    className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    aria-label="정렬 기준"
-                >
-                    <option value="winRate">승률</option>
-                    <option value="pickRate">픽률</option>
-                    <option value="mmrGain">평균 MMR</option>
-                    <option value="survivalTime">평균 생존시간</option>
-                    <option value="count">게임 수</option>
-                </select>
             </div>
 
-            {/* 표 */}
+            {/* 표 — 헤더 클릭 정렬 */}
             <div className="card p-0">
                 <div className="max-h-[60vh] overflow-auto overflow-x-auto">
                     <table className="min-w-[720px] w-full text-sm">
                         <thead className="bg-muted sticky top-0 z-10">
                             <tr className="text-muted-app">
-                                <th className="px-3 py-2 text-left font-medium">
-                                    조합(Clusters)
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    승률
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    픽률
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    평균 MMR
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    평균 생존시간
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    게임 수
-                                </th>
+                                {columns.map((col) => (
+                                    <th
+                                        key={col}
+                                        className={`px-3 py-2 ${col === "clusters" ? "text-left" : "text-right"} font-medium`}
+                                        aria-sort={ariaSort(col)}
+                                    >
+                                        <button
+                                            className="inline-flex items-center gap-1 hover:opacity-80"
+                                            onClick={() => handleSortClick(col)}
+                                        >
+                                            {labelFor(col)}
+                                            <span className="text-xs text-muted-app">
+                                                {sortKey === col
+                                                    ? sortDir === "asc"
+                                                        ? "▲"
+                                                        : "▼"
+                                                    : "↕"}
+                                            </span>
+                                        </button>
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
+
                         <tbody>
                             {sorted.map((s, i) => {
                                 const triad = toTriadRef(s);
+                                const labelPieces = Array.isArray(
+                                    (s as any).clusters,
+                                )
+                                    ? (s as any).clusters
+                                    : splitLabel(
+                                          String(
+                                              (s as any).cluster_label ?? "",
+                                          ),
+                                      );
+
                                 return (
                                     <tr
                                         key={i}
@@ -288,20 +360,10 @@ export default function ClusterCompsClient({
                                         }
                                         title="클릭하면 우측 미리보기를 고정/해제합니다"
                                     >
-                                        <td className="px-3 py-2">
+                                        {/* 조합(Clusters) */}
+                                        <td className="px-3 py-2 text-left">
                                             <span className="inline-flex gap-1">
-                                                {(Array.isArray(
-                                                    (s as any).clusters,
-                                                )
-                                                    ? (s as any).clusters
-                                                    : splitLabel(
-                                                          String(
-                                                              (s as any)
-                                                                  .cluster_label ??
-                                                                  "",
-                                                          ),
-                                                      )
-                                                ).map(
+                                                {labelPieces.map(
                                                     (c: string, j: number) => (
                                                         <span
                                                             key={`${c}-${j}`}
@@ -316,15 +378,23 @@ export default function ClusterCompsClient({
                                                 )}
                                             </span>
                                         </td>
+
+                                        {/* 승률 */}
                                         <td className="px-3 py-2 text-right">
                                             {(s.winRate * 100).toFixed(1)}%
                                         </td>
+
+                                        {/* 픽률 */}
                                         <td className="px-3 py-2 text-right">
                                             {(s.pickRate * 100).toFixed(2)}%
                                         </td>
+
+                                        {/* 평균 MMR */}
                                         <td className="px-3 py-2 text-right">
                                             {s.mmrGain.toFixed(1)}
                                         </td>
+
+                                        {/* 평균 생존시간 */}
                                         <td className="px-3 py-2 text-right">
                                             {s.survivalTime == null
                                                 ? "—"
@@ -334,12 +404,15 @@ export default function ClusterCompsClient({
                                                       ),
                                                   )}
                                         </td>
+
+                                        {/* 게임 수 */}
                                         <td className="px-3 py-2 text-right">
                                             {s.count.toLocaleString()}
                                         </td>
                                     </tr>
                                 );
                             })}
+
                             {sorted.length === 0 && (
                                 <tr>
                                     <td
