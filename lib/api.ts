@@ -105,6 +105,7 @@ type ServerClusterComboRow = {
 
 export type ClusterTriadSummary = {
     clusters: string[]; // ["A","B","K"]
+    clusterIds: number[]; // [11,16,21]
     winRate: number; // 0~1
     pickRate: number; // 0~1
     mmrGain: number;

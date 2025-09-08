@@ -10,6 +10,7 @@ export const metadata = { title: "ER Stats – 클러스터 조합 통계" };
 type ServerClusterComboRow = {
     cluster_label: string; // "A · B · K"
     samples: number; // team_count
+    cluster_ids: number[]; // cluster_id
     wins: number;
     win_rate: number; // 0~1
     pick_rate: number; // 0~1
@@ -57,6 +58,7 @@ async function fetchClusterCombos(opts: {
 
     return rows.map((r) => ({
         clusters: r.cluster_label.split("·").map((s) => s.trim()),
+        clusterIds: r.cluster_ids,
         winRate: r.win_rate,
         pickRate: r.pick_rate,
         mmrGain: r.avg_mmr,

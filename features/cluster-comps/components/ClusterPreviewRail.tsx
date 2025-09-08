@@ -9,17 +9,21 @@ type Member = {
     weaponIcon?: string;
 };
 
-/** 서버에서 해당 클러스터에 속한 캐릭터 목록을 가져옵니다. */
-async function fetchClusterMembers(labels: string[]): Promise<Member[]> {
-    if (!labels?.length) return [];
-    // 예: NEXT_PUBLIC_API_BASE_URL = http://localhost:8080  (뒤 슬래시 제거)
+type Bucket = {
+    id: number;
+    label: string; // 단일 클러스터 라벨(K, P, U 등)
+    items: Member[];
+};
+
+/** 클러스터 ID 묶음으로 캐릭터를 클러스터별 버킷으로 가져오기 */
+async function fetchBucketsByClusterIds(ids: number[]): Promise<Bucket[]> {
+    if (!ids?.length) return [];
     const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(
         /\/$/,
         "",
     );
-    // 👇 엔드포인트는 프로젝트에 맞게 바꿔주세요.
-    const url = `${base}/api/v1/cluster-dict/members?labels=${encodeURIComponent(
-        labels.join(","),
+    const url = `${base}/api/v1/cws/by-clusters?ids=${encodeURIComponent(
+        ids.join(","),
     )}`;
 
     const res = await fetch(url, {
@@ -29,34 +33,53 @@ async function fetchClusterMembers(labels: string[]): Promise<Member[]> {
     if (!res.ok) return [];
 
     const json = await res.json();
-    const rows = Array.isArray(json?.data) ? json.data : json;
+    // {data:{data:[...]}} | {data:[...]} 모두 대응
+    const bucketsRaw: any[] = Array.isArray(json?.data?.data)
+        ? json.data.data
+        : Array.isArray(json?.data)
+          ? json.data
+          : [];
 
-    // 백엔드 스키마에 맞게 매핑
-    return rows.map((r: any) => ({
-        id: r.character_id ?? r.id,
-        name: r.character_name_kr ?? r.name_kr ?? r.name,
-        imageUrl: r.image_url_mini ?? r.imageUrl ?? "",
-        weaponIcon: r.weapon_image_url ?? r.weaponIcon,
-    })) as Member[];
+    return bucketsRaw.map((b) => ({
+        id: b.clusterId ?? b.cluster_id ?? 0,
+        label: b.label ?? b.cluster_label ?? "",
+        items: (b.entries ?? []).map((e: any) => ({
+            id: e?.character?.id ?? e?.character_id ?? 0,
+            name:
+                e?.character?.name ??
+                e?.character_name_kr ??
+                e?.name_kr ??
+                e?.name ??
+                "",
+            imageUrl:
+                e?.character?.imageUrl ??
+                e?.image_url_mini ??
+                e?.imageUrl ??
+                "",
+            weaponIcon: e?.weapon?.imageUrl ?? e?.weapon_image_url ?? undefined,
+        })),
+    }));
 }
 
 /**
- * 광고 배너처럼 컨테이너 바깥에 고정되는 사이드 레일.
- * - 화면이 좁으면 hideBelow 미만에선 자동 숨김
- * - 상단 네비와 겹치지 않게 top 오프셋 제공
- * - containerMax: 본문 max-width(px)에 맞춰 좌표 계산
+ * 사이드 레일(클러스터 미리보기)
+ * - clusterIds: [11,16,21] 처럼 숫자 ID 배열(우선 사용)
+ * - clusterLabels: "K · P · U" 같이 보여줄 문자열 (선택)
  */
 export default function ClusterPreviewRail({
-    clusters,
+    clusterIds,
+    clusterLabels,
     side = "right",
     top = 96,
-    width = 280,
+    width = 320,
     gap = 16,
-    containerMax = 1152, // Tailwind max-w-6xl ≈ 1152px
-    hideBelow = 1536, // 2xl 이상일 때만 노출
+    containerMax = 1152,
+    hideBelow = 1536,
     title = "클러스터 미리보기",
+    bottomGap = 24,
 }: {
-    clusters: string[] | null;
+    clusterIds: number[] | null;
+    clusterLabels?: string[] | string | null;
     side?: "left" | "right";
     top?: number;
     width?: number;
@@ -64,25 +87,26 @@ export default function ClusterPreviewRail({
     containerMax?: number;
     hideBelow?: number;
     title?: string;
+    bottomGap?: number;
 }) {
-    const [members, setMembers] = useState<Member[]>([]);
+    const [buckets, setBuckets] = useState<Bucket[]>([]);
     const [collapsed, setCollapsed] = useState(false);
+    const [expanded, setExpanded] = useState<Record<number, boolean>>({}); // 버킷별 더보기 상태
 
-    // 화면 폭이 충분할 때만 노출
     const showRail = useMemo(() => {
-        if (typeof window === "undefined") return true; // SSR 안전 가드
+        if (typeof window === "undefined") return true;
         return window.innerWidth >= hideBelow;
     }, [hideBelow]);
 
     useEffect(() => {
-        if (!clusters?.length) {
-            setMembers([]);
+        if (!clusterIds?.length) {
+            setBuckets([]);
             return;
         }
-        fetchClusterMembers(clusters)
-            .then(setMembers)
-            .catch(() => setMembers([]));
-    }, [JSON.stringify(clusters)]);
+        fetchBucketsByClusterIds(clusterIds)
+            .then(setBuckets)
+            .catch(() => setBuckets([]));
+    }, [JSON.stringify(clusterIds)]);
 
     // 컨테이너 바깥쪽에 고정 배치
     const baseLeft =
@@ -92,6 +116,9 @@ export default function ClusterPreviewRail({
 
     if (!showRail) return null;
 
+    // 안쪽 콘텐츠는 화면을 벗어나면 스크롤
+    const scrollMaxH = `calc(100vh - ${top + 64 + bottomGap}px)`;
+
     return (
         <aside
             aria-label="Cluster preview side rail"
@@ -100,7 +127,7 @@ export default function ClusterPreviewRail({
                 top,
                 left: baseLeft,
                 width,
-                zIndex: 25, // 네비보다 낮고 본문 위
+                zIndex: 25,
             }}
             className="pointer-events-auto"
         >
@@ -108,6 +135,7 @@ export default function ClusterPreviewRail({
                 className="rounded-2xl border bg-surface text-app shadow-lg"
                 style={{ borderColor: "var(--border)" }}
             >
+                {/* 상단 헤더 */}
                 <div
                     className="flex items-center justify-between px-3 py-2 border-b"
                     style={{ borderColor: "var(--border)" }}
@@ -124,49 +152,126 @@ export default function ClusterPreviewRail({
 
                 {!collapsed && (
                     <>
-                        <div className="px-3 pt-2 text-xs text-muted-app">
-                            {clusters?.length
-                                ? clusters.join(" · ")
-                                : "클러스터를 선택하세요"}
-                        </div>
+                        {/* 스크롤 가능한 본문 */}
+                        <div
+                            className="p-3 space-y-3 pb-2"
+                            style={{ maxHeight: scrollMaxH, overflowY: "auto" }}
+                        >
+                            {/* 버킷(클러스터) 단위로 분리 렌더 */}
+                            {buckets.map((b) => {
+                                const showAll = !!expanded[b.id];
+                                const visible = showAll
+                                    ? b.items
+                                    : b.items.slice(0, 8);
 
-                        <div className="p-3 grid grid-cols-2 gap-2">
-                            {members.map((m) => (
-                                <div
-                                    key={m.id}
-                                    className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-elev-5"
-                                >
-                                    <div className="relative">
-                                        <img
-                                            src={m.imageUrl}
-                                            alt={m.name}
-                                            className="w-9 h-9 rounded-full object-cover border"
+                                return (
+                                    <section
+                                        key={b.id}
+                                        className="rounded-xl border"
+                                        style={{ borderColor: "var(--border)" }}
+                                    >
+                                        {/* 섹션 헤더 */}
+                                        <div
+                                            className="flex items-center justify-between px-2 py-1 text-xs font-semibold border-b"
                                             style={{
                                                 borderColor: "var(--border)",
+                                                background:
+                                                    "var(--elev-5, var(--muted))",
                                             }}
-                                            loading="lazy"
-                                        />
-                                        {!!m.weaponIcon && (
-                                            <img
-                                                src={m.weaponIcon}
-                                                alt=""
-                                                className="absolute -right-1 -bottom-1 w-4 h-4 rounded-full border bg-black"
-                                                style={{
-                                                    borderColor:
-                                                        "var(--surface)",
-                                                }}
-                                                loading="lazy"
-                                            />
-                                        )}
-                                    </div>
-                                    <div className="text-xs truncate">
-                                        {m.name}
-                                    </div>
-                                </div>
-                            ))}
+                                        >
+                                            <span>
+                                                {b.label || `Cluster ${b.id}`}
+                                            </span>
+                                            <span className="text-muted-app">
+                                                {b.items.length}명
+                                            </span>
+                                        </div>
 
-                            {members.length === 0 && (
-                                <div className="col-span-2 text-center text-xs text-muted-app py-4">
+                                        {/* 목록 */}
+                                        <ul className="grid grid-cols-2 gap-2 p-2">
+                                            {visible.map((m) => (
+                                                <li
+                                                    key={`${b.id}-${m.id}-${m.weaponIcon ?? ""}`}
+                                                >
+                                                    <div className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-elev-5">
+                                                        <div className="relative">
+                                                            <img
+                                                                src={m.imageUrl}
+                                                                alt={m.name}
+                                                                className="w-9 h-9 rounded-full object-cover border"
+                                                                style={{
+                                                                    borderColor:
+                                                                        "var(--border)",
+                                                                }}
+                                                                loading="lazy"
+                                                            />
+                                                            {!!m.weaponIcon && (
+                                                                <img
+                                                                    src={
+                                                                        m.weaponIcon
+                                                                    }
+                                                                    alt=""
+                                                                    className="absolute -right-1 -bottom-1 w-4 h-4 rounded-full border bg-black"
+                                                                    style={{
+                                                                        borderColor:
+                                                                            "var(--surface)",
+                                                                    }}
+                                                                    loading="lazy"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs truncate">
+                                                            {m.name}
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            ))}
+
+                                            {b.items.length === 0 && (
+                                                <li className="col-span-2 text-center text-xs text-muted-app py-3">
+                                                    데이터가 없습니다.
+                                                </li>
+                                            )}
+                                        </ul>
+
+                                        {/* 더보기/접기 */}
+                                        {b.items.length > 8 && (
+                                            <div className="flex justify-end px-2 pb-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setExpanded((prev) => ({
+                                                            ...prev,
+                                                            [b.id]: !prev[b.id],
+                                                        }))
+                                                    }
+                                                    className="rounded-lg border px-2 py-1 text-[11px] transition hover:opacity-90"
+                                                    style={{
+                                                        borderColor:
+                                                            "var(--border)",
+                                                        background:
+                                                            "var(--surface)",
+                                                        color: "var(--text)",
+                                                    }}
+                                                >
+                                                    {showAll
+                                                        ? "접기"
+                                                        : "더 보기"}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </section>
+                                );
+                            })}
+
+                            {/* 상태 표시 */}
+                            {!clusterIds?.length && (
+                                <div className="text-center text-xs text-muted-app py-4">
+                                    클러스터를 선택하세요.
+                                </div>
+                            )}
+                            {clusterIds?.length && buckets.length === 0 && (
+                                <div className="text-center text-xs text-muted-app py-4">
                                     데이터가 없습니다.
                                 </div>
                             )}
