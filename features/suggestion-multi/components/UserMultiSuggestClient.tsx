@@ -403,7 +403,6 @@ export default function UserMultiSuggestClient() {
                             fromSolo: 0,
                             fromCluster: 1,
                         },
-                        note: `samples: ${m?.samples ?? 0}${m?.source === "cluster" ? " (cluster agg)" : ""}`,
                     };
                 });
 

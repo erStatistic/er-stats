@@ -11,7 +11,7 @@ type Props = {
 
 function pct(x?: number) {
     const v = Number.isFinite(x as number) ? (x as number) : 0;
-    return `${(v * 100).toFixed(1)}%`;
+    return `${(v * 100).toFixed(2)}%`;
 }
 function mmr(x?: number) {
     const v = Number.isFinite(x as number) ? (x as number) : 0;

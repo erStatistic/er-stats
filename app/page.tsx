@@ -9,19 +9,14 @@ export const metadata = { title: "ER Hive – 대시보드" };
 
 export default async function HomePage() {
     // ✅ SSR에서 한 번만 생성(고정 시드) → Hydration 안전
-    const [latestPatch, topChars, popularComps] = await Promise.all([
-        fetchLatestPatch(),
+    const [topChars, popularComps] = await Promise.all([
         fetchTopCharacters(5),
-        fetchPopularComps(3),
+        fetchPopularComps(5),
     ]);
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
-            <HomeDashboard
-                latestPatch={latestPatch}
-                topChars={topChars}
-                popularComps={popularComps}
-            />
+            <HomeDashboard topChars={topChars} popularComps={popularComps} />
         </div>
     );
 }

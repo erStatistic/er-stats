@@ -5,44 +5,6 @@ import { mulberry32 } from "@/lib/rng";
 const CHAR_NAMES = Array.from({ length: 36 }).map((_, i) => `실험체 ${i + 1}`);
 const CHAR_IMG = (id: number) => `/chars/${((id - 1) % 9) + 1}.png`;
 
-export async function fetchLatestPatch(): Promise<PatchNote> {
-    const rng = mulberry32(777); // 고정 시드
-    // 가장 최신 패치 1건 (간단 버전)
-    return {
-        id: "patch-0.76.1",
-        kind: "official",
-        version: "v0.76.1",
-        title: "정식 패치",
-        date: "2025-08-21",
-        entries: [
-            {
-                id: "e-1",
-                targetType: "character",
-                targetId: 3,
-                targetName: CHAR_NAMES[2],
-                field: "기본 공격 피해량",
-                before: "50",
-                after: "54",
-                delta: "+4",
-                changeType: "buff",
-                notes: "초중반 견제 강화",
-            },
-            {
-                id: "e-2",
-                targetType: "character",
-                targetId: 11,
-                targetName: CHAR_NAMES[10],
-                field: "궁극기 쿨다운",
-                before: "80s",
-                after: "90s",
-                delta: "+10s",
-                changeType: "nerf",
-                notes: "후반 캐리 억제",
-            },
-        ],
-    };
-}
-
 export async function fetchJSON<T>(
     url: string,
     init?: RequestInit,
@@ -163,7 +125,7 @@ type PopularCompsApiResp = {
 
 // ---- 실제 데이터 호출 버전 ----
 export async function fetchPopularComps(
-    count = 3,
+    count = 5,
     opts?: {
         start?: string; // ISO (옵션)
         end?: string; // ISO (옵션)
