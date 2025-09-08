@@ -158,7 +158,7 @@ export default function CharacterClient({
                         type="button"
                         onClick={() => setHoneyOnly((prev) => !prev)}
                         className={
-                            "px-3 py-1.5 text-xs rounded-lg border transition " +
+                            "px-3 py-1.5 text-s rounded-lg border transition " +
                             (honeyOnly
                                 ? "bg-elev-20 border-app text-app"
                                 : "bg-surface border-app text-muted-app hover:bg-elev-10")
