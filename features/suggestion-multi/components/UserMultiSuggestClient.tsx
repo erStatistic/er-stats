@@ -481,7 +481,10 @@ export default function UserMultiSuggestClient() {
                 </div>
 
                 {/* 캐릭터 카탈로그 */}
-                <details className="card p-0 overflow-hidden" open>
+                <details
+                    className="card p-0 relative z-0 isolate overflow-hidden"
+                    open
+                >
                     <summary className="cursor-pointer select-none text-sm font-medium flex items-center gap-2 px-4 py-3">
                         Character catalog{" "}
                         <span
@@ -499,13 +502,13 @@ export default function UserMultiSuggestClient() {
                                 borderColor: "var(--border)",
                                 background: "var(--surface)",
                             }}
-                            placeholder="Search characters (초성도 가능: ㅇㄹㅂ)"
+                            placeholder="Search characters"
                             value={charQ}
                             onChange={(e) => setCharQ(e.target.value)}
                         />
                     </div>
 
-                    <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+                    <div className="px-4 pb-4 max-h-[150vh] overflow-y-auto">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                             {filteredChars.map((c) => (
                                 <button
