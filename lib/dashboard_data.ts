@@ -65,6 +65,7 @@ export async function fetchTopCharacters(
             id: r.character_id,
             name: r.character_name_kr,
             weapon: r.weapon_name_kr,
+            weapon_id: r.weapon_id,
             winRate: r.win_rate, // 0~1
             pickRate: r.pick_rate, // 0~1
             mmrGain: r.avg_mmr,

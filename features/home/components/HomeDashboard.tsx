@@ -93,7 +93,7 @@ export default function HomeDashboard({
                     {topChars.map((c) => (
                         <Link
                             key={c.id}
-                            href={`/characters/${c.id}`}
+                            href={`/characters/${c.id}?wc=${c.weapon_id}`}
                             className="card hover:bg-elev-10 transition-colors"
                         >
                             <div className="flex items-center gap-3">

@@ -21,6 +21,7 @@ export interface CharacterSummary {
     id: number;
     name: string;
     weapon: string;
+    weapon_id: number;
     winRate: number;
     pickRate: number;
     mmrGain: number;
