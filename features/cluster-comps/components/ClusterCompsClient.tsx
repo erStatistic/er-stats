@@ -7,8 +7,11 @@ import Carousel from "@/features/ui/Carousel";
 import ClusterCompCard from "./ClusterCompCard";
 import { formatDuration } from "@/lib/stats";
 import { PATCHES, GAME_TIERS } from "@/features";
-import { SortKey } from "@/features/cluster-comps";
 import ClusterPreviewRail from "@/features/cluster-comps/components/ClusterPreviewRail";
+import type { Patch, GameTier } from "@/features";
+import type { SortKey } from "@/features/cluster-comps"; // "winRate" | "pickRate" | "mmrGain" | "survivalTime" | "count"
+
+type SortDir = "asc" | "desc";
 
 export default function ClusterCompsClient({
     initial,
@@ -18,35 +21,36 @@ export default function ClusterCompsClient({
     const [q, setQ] = useState("");
     const [patch, setPatch] = useState<Patch>("All");
     const [tier, setTier] = useState<GameTier>("All");
-    const [sort, setSort] = useState<SortKey>("winRate");
 
-    // 사이드 미리보기 상태
+    // 🔽 테이블 정렬 상태(헤더로만 제어)
+    const [sortKey, setSortKey] = useState<SortKey>("winRate");
+    const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+    // 사이드 미리보기
     const [previewClusters, setPreviewClusters] = useState<string[] | null>(
         null,
-    ); // hover
-    const [pinnedClusters, setPinnedClusters] = useState<string[] | null>(null); // click 고정
+    );
+    const [pinnedClusters, setPinnedClusters] = useState<string[] | null>(null);
 
     // Top3 (전체 기준)
     const topOverall = useMemo(() => {
-        const arr = [...initial];
-        arr.sort((a, b) => b.winRate - a.winRate);
+        const arr = [...initial].sort((a, b) => b.winRate - a.winRate);
         return arr.slice(0, Math.min(3, arr.length));
     }, [initial]);
 
     // 진행바 최대값(Top3 기준)
     const topMax = useMemo(() => {
-        if (topOverall.length === 0) {
+        if (topOverall.length === 0)
             return { winRate: 1, pickRate: 1, mmr: 1, games: 1 };
-        }
         return {
             winRate: Math.max(
                 0,
                 ...topOverall.map((s) => Number(s.winRate || 0)),
-            ), // 0~1
+            ),
             pickRate: Math.max(
                 0,
                 ...topOverall.map((s) => Number(s.pickRate || 0)),
-            ), // 0~1
+            ),
             mmr: Math.max(1, ...topOverall.map((s) => Number(s.mmrGain || 0))),
             games: Math.max(1, ...topOverall.map((s) => Number(s.count || 0))),
         };
@@ -66,32 +70,83 @@ export default function ClusterCompsClient({
             );
     }, [initial, patch, tier, q]);
 
-    // 정렬
+    // 정렬값 추출
+    const getVal = (s: ClusterTriadSummary, key: SortKey) => {
+        switch (key) {
+            case "winRate":
+                return s.winRate ?? 0;
+            case "pickRate":
+                return s.pickRate ?? 0;
+            case "mmrGain":
+                return s.mmrGain ?? 0;
+            case "survivalTime":
+                // null은 항상 끝으로
+                return s.survivalTime == null
+                    ? sortDir === "asc"
+                        ? Number.POSITIVE_INFINITY
+                        : Number.NEGATIVE_INFINITY
+                    : s.survivalTime;
+            case "count":
+                return s.count ?? 0;
+            default:
+                return 0;
+        }
+    };
+
+    // 정렬 적용
     const sorted = useMemo(() => {
-        const c = [...filtered];
-        c.sort((a, b) => {
-            switch (sort) {
-                case "pickRate":
-                    return b.pickRate - a.pickRate;
-                case "mmrGain":
-                    return b.mmrGain - a.mmrGain;
-                case "count":
-                    return b.count - a.count;
-                case "survivalTime": {
-                    const na = a.survivalTime ?? -Infinity;
-                    const nb = b.survivalTime ?? -Infinity;
-                    return nb - na;
-                }
-                default:
-                    return b.winRate - a.winRate;
+        const out = [...filtered];
+        out.sort((a, b) => {
+            const av = getVal(a, sortKey);
+            const bv = getVal(b, sortKey);
+            if (av === bv) {
+                // 보조: 게임 수 ↓, 클러스터 문자열 ↑
+                const byCount = (b.count ?? 0) - (a.count ?? 0);
+                if (byCount !== 0) return byCount;
+                return a.clusters.join("").localeCompare(b.clusters.join(""));
             }
+            return sortDir === "asc" ? av - bv : bv - av;
         });
-        return c;
-    }, [filtered, sort]);
+        return out;
+    }, [filtered, sortKey, sortDir]);
+
+    // 헤더 클릭: 같은 컬럼이면 dir 토글, 아니면 dir=asc로 시작
+    const handleSortClick = (col: SortKey) => {
+        setSortDir((prev) =>
+            sortKey === col ? (prev === "asc" ? "desc" : "asc") : "asc",
+        );
+        setSortKey(col);
+    };
+
+    const ariaSort = (col: SortKey): "ascending" | "descending" | "none" =>
+        sortKey === col
+            ? sortDir === "asc"
+                ? "ascending"
+                : "descending"
+            : "none";
+
+    const labelFor = (col: SortKey) =>
+        col === "winRate"
+            ? "승률"
+            : col === "pickRate"
+              ? "픽률"
+              : col === "mmrGain"
+                ? "평균 MMR"
+                : col === "survivalTime"
+                  ? "평균 생존시간"
+                  : "게임 수";
+
+    const columns: SortKey[] = [
+        "winRate",
+        "pickRate",
+        "mmrGain",
+        "survivalTime",
+        "count",
+    ];
 
     return (
         <div className="text-app relative">
-            {/* Top3 캐러셀 — 전체 기준 (필터 무시) */}
+            {/* Top3 캐러셀 */}
             {topOverall.length > 0 && (
                 <>
                     <h2 className="text-lg sm:text-xl font-bold mb-3">
@@ -114,7 +169,7 @@ export default function ClusterCompsClient({
                 </>
             )}
 
-            {/* 필터 바 */}
+            {/* 필터 바 (정렬 컨트롤 없음) */}
             <div className="mt-6 mb-4 flex flex-wrap items-center gap-2">
                 <input
                     className="w-44 rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none placeholder:text-muted-app"
@@ -147,18 +202,6 @@ export default function ClusterCompsClient({
                         </option>
                     ))}
                 </select>
-                <select
-                    className="rounded-xl border border-app bg-surface text-app px-3 py-2 text-sm outline-none"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    aria-label="정렬 기준"
-                >
-                    <option value="winRate">승률</option>
-                    <option value="pickRate">픽률</option>
-                    <option value="mmrGain">평균 MMR</option>
-                    <option value="survivalTime">평균 생존시간</option>
-                    <option value="count">게임 수</option>
-                </select>
             </div>
 
             {/* 표 */}
@@ -170,23 +213,32 @@ export default function ClusterCompsClient({
                                 <th className="px-3 py-2 text-left font-medium">
                                     조합(Clusters)
                                 </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    승률
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    픽률
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    평균 MMR
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    평균 생존시간
-                                </th>
-                                <th className="px-3 py-2 text-right font-medium">
-                                    게임 수
-                                </th>
+                                {columns.map((col) => (
+                                    <th
+                                        key={col}
+                                        className="px-3 py-2 text-right font-medium"
+                                        aria-sort={ariaSort(col)}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSortClick(col)}
+                                            className="inline-flex items-center gap-1 w-full justify-end hover:opacity-80 select-none"
+                                            title={`${labelFor(col)}로 정렬`}
+                                        >
+                                            {labelFor(col)}
+                                            <span className="text-xs text-muted-app">
+                                                {sortKey === col
+                                                    ? sortDir === "asc"
+                                                        ? "▲"
+                                                        : "▼"
+                                                    : "↕"}
+                                            </span>
+                                        </button>
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
+
                         <tbody>
                             {sorted.map((s, i) => (
                                 <tr
@@ -270,11 +322,11 @@ export default function ClusterCompsClient({
                     topOverall[0]?.clusters ??
                     null
                 }
-                containerMax={1152} // 본문 max-w(px)에 맞춰 조정 (max-w-6xl ≈ 1152)
-                top={96} // 네비 높이에 맞춰 여백
+                containerMax={1152}
+                top={96}
                 width={280}
                 gap={16}
-                hideBelow={1536} // 2xl 미만에서는 숨김
+                hideBelow={1536}
                 title="클러스터 미리보기"
             />
         </div>
