@@ -8,19 +8,20 @@
 /* ===================== */
 :root {
     /* Light */
-    --bg: #f8fafc;
-    --surface: #ffffff;
-    --surface-2: #f1f5f9;
-    --muted: #eef2f6;
-    --border: #e2e8f0;
-    --text: #0f172a;
-    --text-2: #334155;
-    --text-muted: #64748b;
-    --brand: #00bca3;
-    color-scheme: light dark;
-    --comp-banner-from: #818cf8; /* indigo-400 */
-    --comp-banner-to: #d946ef; /* fuchsia-500 */
-    --comp-banner-text: #ffffff;
+    --bg: #eef2f6; /* 기존 #F8FAFC → 살짝 톤 다운 */
+    --surface: #f6f8fb; /* 기존 #FFFFFF → 미색 톤 */
+    --surface-2: #e9eef5; /* 카드/섹션 백 */
+    --muted: #e6ebf3; /* 헤더/스티키 영역 */
+    --border: #d3dce6; /* 라인 대비 조금 올리기 */
+    --text: #1a2234; /* 진한 남회색(완전 블랙보다 부담 ↓) */
+    --text-2: #364662;
+    --text-muted: #5f6e85;
+    --brand: #0ea5a7; /* 청록 톤 살짝 차분하게 */
+
+    /* 배너 그라데이션 채도 낮추기 */
+    --comp-banner-from: #7583f2; /* indigo-350 느낌 */
+    --comp-banner-to: #d16ee7; /* fuchsia-450 느낌 */
+    --comp-banner-text: #0d1320; /* 완전 흰색 대신 딥 네이비 텍스트 */
 }
 .dark {
     /* Dark */
