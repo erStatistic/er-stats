@@ -30,7 +30,10 @@ export default function TierFramedImage({ ...props }) {
         frameThickness,
         autoThickness = false,
         badgeBorderPx = 2,
-    } = props;
+        // 🔽 새로 추가된 옵션
+        frameBgAlpha = 0.12, // 프레임(테두리 영역) 배경 틴트 투명도
+        strokeRatio = 0.35, // 프레임 두께 중 선의 두께 비율 (0~1)
+    } = props as any;
 
     const color = getTierColor(tier);
     const cornerCls = corner === "tr" ? "top-1 right-1" : "top-1 left-1";
@@ -43,15 +46,17 @@ export default function TierFramedImage({ ...props }) {
         ? Math.max(2, Math.round(size / 18))
         : (frameThickness ?? thickness ?? 2);
 
+    // 스트로크(선) 두께는 프레임 두께의 일정 비율로
+    const strokePx = Math.max(1, Math.round(computedFrame * strokeRatio));
+
     return (
         <div
             className={`inline-block ${className ?? ""}`}
             style={{ width: size, height: size }}
         >
-            {/* ✅ 이 박스가 전부의 기준점이 되도록 relative 지정 */}
             <div
                 className={`relative w-full h-full overflow-hidden ${rcls[radius]} ${bgClassName}`}
-                style={{ contain: "layout paint" }} // 스택/포지셔닝 안정화(옵션)
+                style={{ contain: "layout paint" }}
             >
                 <Image
                     src={src}
@@ -62,11 +67,21 @@ export default function TierFramedImage({ ...props }) {
                     priority
                 />
 
-                {/* 안쪽 프레임 */}
+                {/* 🔹 프레임 배경(틴트) 레이어: 프레임 두께 전체를 부드럽게 채운다 */}
                 <div
                     className={`pointer-events-none absolute inset-0 ${rcls[radius]}`}
                     style={{
-                        boxShadow: `inset 0 0 0 ${computedFrame}px ${color}`,
+                        // 프레임 영역 전체를 살짝 채워주는 반투명 컬러
+                        boxShadow: `inset 0 0 0 ${computedFrame}px ${hexToRGBA(color, frameBgAlpha)}`,
+                    }}
+                    aria-hidden
+                />
+
+                {/* 🔹 프레임 스트로크(선) 레이어: 얇게 선명한 라인만 */}
+                <div
+                    className={`pointer-events-none absolute inset-0 ${rcls[radius]}`}
+                    style={{
+                        boxShadow: `inset 0 0 0 ${strokePx}px ${color}`,
                     }}
                     aria-hidden
                 />
