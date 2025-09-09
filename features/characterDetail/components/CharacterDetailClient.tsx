@@ -165,6 +165,7 @@ export default function CharacterDetailClient({
         overview,
     } = initial;
 
+    console.log(r);
     const displayName = character?.nameKr ?? (r as any).name ?? "이름 없음";
     const displayId = character?.id ?? r.id;
     const portraitSrc =
@@ -256,6 +257,11 @@ export default function CharacterDetailClient({
     const mmrGain = ov?.summary?.mmrGain ?? 0;
     const survivalSec = ov?.summary?.survivalSec;
 
+    const metricsAllZero =
+        (winRate ?? 0) === 0 &&
+        (pickRate ?? 0) === 0 &&
+        (mmrGain ?? 0) === 0 &&
+        (survivalSec ?? 0) === 0;
     // 레이더(1~5 → 0~1)
     const radar = useMemo(() => {
         const s = ov?.stats;
@@ -453,6 +459,12 @@ export default function CharacterDetailClient({
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
+            {metricsAllZero && !ov?.routes?.length && !hasComps && (
+                <div className="mb-4 rounded-md border border-app/40 bg-elev-5 px-3 py-2 text-xm font-bold text-muted-app text-center">
+                    신규/최근 추가된 캐릭터라 데이터가 아직 부족해요. 일정량
+                    이상 쌓이면 지표·추천이 자동으로 채워집니다.
+                </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                     <TierFramedImage
@@ -597,22 +609,38 @@ export default function CharacterDetailClient({
             {/* 추천 빌드 */}
             <section className="mb-6">
                 <h2 className="text-lg font-semibold mb-2">추천 빌드</h2>
-                <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
-                    {ov?.routes?.map((b) => (
-                        <div key={b.id} className="card p-4 relative">
-                            {/* 우측 상단: 복사 아이콘 버튼 */}
-                            <CopyButton id={b.id} />
+
+                {/* ✅ 아무 경로도 없을 때 */}
+                {(!ov?.routes || ov.routes.length === 0) && (
+                    <div className="card p-6 flex items-center justify-center">
+                        <div className="text-center">
                             <div className="font-medium text-app">
-                                루트 번호: {b.id}
+                                추천 빌드가 없습니다
                             </div>
                             <div className="text-xs text-muted-app mt-1">
-                                {b.title || "추천"}
+                                최근 데이터 기준 조건을 만족하는 추천 경로가
+                                아직 없어요.
                             </div>
                         </div>
-                    ))}
-                </div>
-            </section>
+                    </div>
+                )}
 
+                {ov?.routes?.length > 0 && (
+                    <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
+                        {ov.routes.map((b) => (
+                            <div key={b.id} className="card p-4 relative">
+                                <CopyButton id={b.id} />
+                                <div className="font-medium text-app">
+                                    루트 번호: {b.id}
+                                </div>
+                                <div className="text-xs text-muted-app mt-1">
+                                    {b.title || "추천"}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
             {/* 추천 팀 조합 */}
             <section>
                 <h2 className="text-lg font-semibold mb-2">추천 팀 조합</h2>

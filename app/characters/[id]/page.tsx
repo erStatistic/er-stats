@@ -101,6 +101,7 @@ async function getCwOverview(cwId: number) {
 
     return {
         cwId: d.cwId,
+        tier: d.tier,
         character: {
             id: d.character?.id,
             name: d.character?.name,
@@ -164,6 +165,29 @@ async function routeToBuild(
         };
     }
 }
+async function getCharacterTierFromStats(id: number): Promise<string> {
+    const base = process.env.API_BASE_URL!;
+    // 🔎 너희 “캐릭터별 통계 테이블”에서 단일 캐릭 요약을 주는 엔드포인트를 연결해줘.
+    // (예시 1) /api/v1/analytics/characters/{id}/summary
+    // (예시 2) /api/v1/analytics/characters/row?id=...
+    const tryUrls = [
+        `${base}/api/v1/analytics/characters/${id}/summary`,
+        `${base}/api/v1/analytics/characters/${id}`,
+        `${base}/api/v1/characters/${id}/stats`,
+    ];
+    for (const url of tryUrls) {
+        try {
+            const j = await fetchJSON<any>(url);
+            const d = j?.data ?? j;
+            const t = d?.tier ?? d?.grade ?? d?.rankTier ?? d?.Tier ?? d?.Grade;
+            if (typeof t === "string" && t.trim())
+                return t.trim().toUpperCase();
+        } catch {
+            /* try next */
+        }
+    }
+    return "A"; // 폴백
+}
 
 async function buildsFromOverviewRoutes(overview: any): Promise<Build[]> {
     const routes = overview?.overview?.routes ?? [];
@@ -204,6 +228,8 @@ export default async function Page({
     const variants = await getCharacterCws(charId);
     if (!variants || variants.length === 0) notFound();
 
+    const tierFromStats = await getCharacterTierFromStats(charId);
+
     const sorted = [...variants].sort((a, b) => {
         const ac = a.weaponCode ?? Number.POSITIVE_INFINITY;
         const bc = b.weaponCode ?? Number.POSITIVE_INFINITY;
@@ -227,25 +253,19 @@ export default async function Page({
 
     const overview = selected ? await getCwOverview(selected.cwId) : null;
 
+    // ✅ 통계 테이블 기준 티어 주입
+
     const rMinimal = {
         id: character.id,
         name: character.nameKr,
-        tier: "A",
+        tier: overview.tier, // ⬅️ 요걸 TierFramedImage에 넘김
     } as any;
+
+    console.log(rMinimal);
 
     let builds: Build[] = [];
     if (overview) {
         builds = await buildsFromOverviewRoutes(overview);
-    }
-    if (builds.length === 0) {
-        builds = [
-            {
-                id: "fallback-1",
-                title: `${currentWeapon} 추천 #1`,
-                description: "임시 폴백 빌드",
-                items: [],
-            },
-        ];
     }
 
     const teams = mockTeamsFor(character.id, currentWeapon);

@@ -11,6 +11,7 @@ export default function MiniLineChart({
     suffix = "",
     decimals = 1,
     yFromZero = true, // 0부터 시작
+    emptyMessage = "아직 추세 데이터가 없습니다",
 }: {
     title: string;
     data: { x: string; y: number }[]; // y는 % 값(예: 10.5)
@@ -21,8 +22,9 @@ export default function MiniLineChart({
     suffix?: string; // y축/툴팁 단위 (예: "%")
     decimals?: number; // 표기 소수점 자리
     yFromZero?: boolean;
+    emptyMessage?: string;
 }) {
-    if (!data.length) return null;
+    const empty = data.length === 0;
 
     // ── 레이아웃(라벨/툴팁 여유)
     const m = { top: 18, right: 12, bottom: 42, left: 40 };
@@ -33,11 +35,11 @@ export default function MiniLineChart({
 
     // ── 스케일
     const ys = data.map((d) => d.y);
-    const yMin = Math.min(...ys);
-    const yMax = Math.max(...ys);
+    const yMinSrc = empty ? 0 : Math.min(...ys);
+    const yMaxSrc = empty ? 1 : Math.max(...ys);
     const nice = yFromZero
-        ? niceScale(0, yMax, yTickCount)
-        : niceScale(yMin, yMax, yTickCount);
+        ? niceScale(0, yMaxSrc, yTickCount)
+        : niceScale(yMinSrc, yMaxSrc, yTickCount);
 
     let y0 = yFromZero ? 0 : nice.min;
     let y1 = nice.max;
@@ -47,19 +49,23 @@ export default function MiniLineChart({
         step = (y1 - y0) / Math.max(yTickCount, 1);
     }
 
-    const xPos = (i: number) =>
-        m.left + (i * iw) / Math.max(data.length - 1, 1);
+    const xDenom = Math.max((data.length || 2) - 1, 1); // 빈 데이터 보호
+    const xPos = (i: number) => m.left + (i * iw) / xDenom;
     const yPos = (v: number) => m.top + ih - ((v - y0) / (y1 - y0 || 1)) * ih;
 
-    // ── path
-    const path = useMemo(
-        () =>
-            data
-                .map((d, i) => `${i ? "L" : "M"} ${xPos(i)} ${yPos(d.y)}`)
-                .join(" "),
+    // ── path (빈 경우 0% 기준선)
+    const path = useMemo(() => {
+        const src = empty
+            ? [
+                  { x: "", y: 0 },
+                  { x: "", y: 0 },
+              ]
+            : data;
+        return src
+            .map((d, i) => `${i ? "L" : "M"} ${xPos(i)} ${yPos(d.y)}`)
+            .join(" ");
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [data, w, h, y0, y1],
-    );
+    }, [data, w, h, y0, y1, empty]);
 
     // ── Y 틱
     const yTicks: number[] = [];
@@ -67,7 +73,7 @@ export default function MiniLineChart({
         yTicks.push(Number(v.toFixed(6)));
     }
 
-    // ── X 라벨 간격이 좁으면 일부만 표시
+    // ── X 라벨 간격이 좁으면 일부만 표시 (빈 경우엔 사용 안 함)
     const stepX = iw / Math.max(data.length - 1, 1);
     const minGap = 26; // 최소 간격(px)
     const xEvery = Math.max(1, Math.ceil(minGap / stepX));
@@ -79,6 +85,7 @@ export default function MiniLineChart({
     const [hi, setHi] = useState<number | null>(null);
 
     const onMove = (e: React.MouseEvent<SVGRectElement>) => {
+        if (empty) return;
         const svg = svgRef.current;
         if (!svg) return;
         const rect = svg.getBoundingClientRect();
@@ -107,7 +114,7 @@ export default function MiniLineChart({
         tipW = 0,
         tipH = 20,
         tipText = "";
-    if (hi != null) {
+    if (!empty && hi != null) {
         const d = data[hi];
         const tx = xPos(hi);
         const ty = yPos(d.y);
@@ -159,45 +166,54 @@ export default function MiniLineChart({
                     </text>
                 ))}
 
-                {/* X 라벨(45도 회전, 일부만 표시) */}
-                {data.map((d, i) => {
-                    if (i % xEvery !== 0) return null;
-                    const x = xPos(i);
-                    const dx = i === 0 ? 6 : i === n - 1 ? -6 : 0;
-                    return (
-                        <text
-                            key={`xl${i}`}
-                            x={x}
-                            y={xLabelY}
-                            transform={`rotate(45 ${x} ${xLabelY})`}
-                            textAnchor="end"
-                            style={{
-                                fill: "var(--text-muted)",
-                                fontSize: "10px",
-                            }}
-                            dx={dx}
-                        >
-                            {d.x}
-                        </text>
-                    );
-                })}
+                {/* X 라벨(빈 경우 생략) */}
+                {!empty &&
+                    data.map((d, i) => {
+                        if (i % xEvery !== 0) return null;
+                        const x = xPos(i);
+                        const dx = i === 0 ? 6 : i === n - 1 ? -6 : 0;
+                        return (
+                            <text
+                                key={`xl${i}`}
+                                x={x}
+                                y={xLabelY}
+                                transform={`rotate(45 ${x} ${xLabelY})`}
+                                textAnchor="end"
+                                style={{
+                                    fill: "var(--text-muted)",
+                                    fontSize: "10px",
+                                }}
+                                dx={dx}
+                            >
+                                {d.x}
+                            </text>
+                        );
+                    })}
 
-                {/* 라인 + 포인트 */}
-                <path d={path} fill="none" stroke={color} strokeWidth={2} />
-                {data.map((d, i) => (
-                    <circle
-                        key={`p${i}`}
-                        cx={xPos(i)}
-                        cy={yPos(d.y)}
-                        r={2.5}
-                        fill={color}
-                    />
-                ))}
+                {/* 라인 */}
+                <path
+                    d={path}
+                    fill="none"
+                    stroke={empty ? "var(--border)" : color}
+                    strokeWidth={2}
+                    strokeDasharray={empty ? "6 6" : "0"}
+                />
 
-                {/* Hover 가이드 & 툴팁 */}
-                {hi != null && (
+                {/* 포인트 (빈 경우 생략) */}
+                {!empty &&
+                    data.map((d, i) => (
+                        <circle
+                            key={`p${i}`}
+                            cx={xPos(i)}
+                            cy={yPos(d.y)}
+                            r={2.5}
+                            fill={color}
+                        />
+                    ))}
+
+                {/* Hover 가이드 & 툴팁 (빈 경우 비활성) */}
+                {!empty && hi != null && (
                     <>
-                        {/* 수직 가이드라인 */}
                         <line
                             x1={xPos(hi)}
                             x2={xPos(hi)}
@@ -206,7 +222,6 @@ export default function MiniLineChart({
                             stroke="var(--border)"
                             strokeDasharray="4 4"
                         />
-                        {/* 하이라이트 포인트 */}
                         <circle
                             cx={xPos(hi)}
                             cy={yPos(data[hi].y)}
@@ -215,7 +230,6 @@ export default function MiniLineChart({
                             stroke="white"
                             strokeWidth={1.5}
                         />
-                        {/* 툴팁 */}
                         <g>
                             <rect
                                 x={tipX}
@@ -242,16 +256,30 @@ export default function MiniLineChart({
                     </>
                 )}
 
-                {/* 포인터 이벤트 캡쳐(차트 영역) */}
-                <rect
-                    x={m.left}
-                    y={m.top}
-                    width={iw}
-                    height={ih}
-                    fill="transparent"
-                    onMouseMove={onMove}
-                    onMouseLeave={onLeave}
-                />
+                {/* 빈 상태 안내 */}
+                {empty && (
+                    <text
+                        x={m.left + iw / 2}
+                        y={m.top + ih / 2}
+                        textAnchor="middle"
+                        style={{ fill: "var(--text-muted)", fontSize: "12px" }}
+                    >
+                        {emptyMessage}
+                    </text>
+                )}
+
+                {/* 포인터 이벤트 캡쳐(차트 영역) — 빈 경우 비활성 */}
+                {!empty && (
+                    <rect
+                        x={m.left}
+                        y={m.top}
+                        width={iw}
+                        height={ih}
+                        fill="transparent"
+                        onMouseMove={onMove}
+                        onMouseLeave={onLeave}
+                    />
+                )}
             </svg>
         </div>
     );
