@@ -5,7 +5,7 @@ import type { ClusterTriadSummary } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const metadata = { title: "ER Stats – 클러스터 조합 통계" };
+export const metadata = { title: "ER Nebi – 클러스터 조합 통계" };
 
 type ServerClusterComboRow = {
     cluster_label: string; // "A · B · K"

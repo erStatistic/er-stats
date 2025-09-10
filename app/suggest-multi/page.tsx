@@ -1,7 +1,7 @@
 import NavBar from "@/features/ui/NavBar";
 import UserMultiSuggestClient from "@/features/suggestion-multi/components/UserMultiSuggestClient";
 
-export const metadata = { title: "ER Stats – 멀티 유저 맞춤 조합 추천" };
+export const metadata = { title: "ER Nebi – 멀티 유저 맞춤 조합 추천" };
 
 export default function SuggestMultiPage() {
     return (

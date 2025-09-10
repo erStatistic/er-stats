@@ -7,7 +7,7 @@ import { ThemeProvider } from "next-themes";
 import ThemeToggle from "@/features/ui/ThemeToggle";
 
 export const metadata = {
-    title: "ER Hive",
+    title: "ER Nebi",
     description: "Eternal Return Stats",
 };
 
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                                     className="transition-colors"
                                     style={{ color: "var(--brand)" }}
                                 >
-                                    ER Hive
+                                    ER Nebi
                                 </Link>
                             </h1>
                             <NavBar />

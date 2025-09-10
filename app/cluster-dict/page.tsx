@@ -3,7 +3,7 @@ import NavBar from "@/features/ui/NavBar";
 import ClusterDirectoryClient from "@/features/cluster-dict/components/ClusterDirectoryClient";
 import { ssrGetCwDirectory } from "@/lib/server-api";
 
-export const metadata = { title: "ER Stats – 군집(클러스터) 디렉터리" };
+export const metadata = { title: "ER Nebi – 군집(클러스터) 디렉터리" };
 export const revalidate = 300; // ISR: 5분마다 재검증 (원하는 주기로 변경)
 
 export default async function ClustersPage() {
