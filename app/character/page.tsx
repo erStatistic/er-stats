@@ -1,7 +1,5 @@
 // app/character/page.tsx
 import CharacterClient from "@/features/character/components/CharacterClient";
-import { makeMock } from "@/lib/mock";
-import { mulberry32 } from "@/lib/rng";
 import { serverListCharacters } from "@/lib/api"; // DB 목록 호출 유틸
 
 export default async function CharacterStatPage() {
@@ -15,7 +13,7 @@ export default async function CharacterStatPage() {
         .then((r) => r.json())
         .then((j) => j.data ?? j);
 
-    const rows = (stats as any[]).map((s: any) => ({
+    const rows = (stats as CharacterSummary[]).map((s: CharacterSummary) => ({
         score: s.s_score,
         tier: s.tier,
         characterId: s.character_id,

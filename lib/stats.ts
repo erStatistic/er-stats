@@ -104,21 +104,3 @@ export function meanStd(values: number[]) {
         values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
     return { mean, std: Math.sqrt(variance) };
 }
-
-export function computeHoneySet(rows: CharacterSummary[]): HoneyResult {
-    if (!rows.length) return { ids: new Set(), mode: "none", topK: 0 };
-    const wrT = computeTop10Threshold(rows.map((r) => r.winRate));
-    const prT = computeTop10Threshold(rows.map((r) => r.pickRate));
-    const mmT = computeTop10Threshold(rows.map((r) => r.mmrGain));
-
-    // const triple = rows.filter(
-    //     (r) => r.winRate >= wrT && r.pickRate >= prT && r.mmrGain >= mmT,
-    // );
-
-    const triple = rows.filter((r) => r.winRate >= wrT);
-    return {
-        ids: new Set(triple.map((r) => r.id)),
-        mode: "triple",
-        topK: triple.length,
-    };
-}

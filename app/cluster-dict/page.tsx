@@ -1,5 +1,4 @@
 // app/cluster-dict/page.tsx  (Server Component)
-import NavBar from "@/features/ui/NavBar";
 import ClusterDirectoryClient from "@/features/cluster-dict/components/ClusterDirectoryClient";
 import { ssrGetCwDirectory } from "@/lib/server-api";
 

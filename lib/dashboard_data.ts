@@ -1,9 +1,4 @@
-import { PatchNote, CharacterSummary, CompSummary } from "@/types";
-import { mulberry32 } from "@/lib/rng";
-
-// ---------- MOCK HELPERS (SSR에서만 호출: 시드 고정으로 Hydration 안전) ----------
-const CHAR_NAMES = Array.from({ length: 36 }).map((_, i) => `실험체 ${i + 1}`);
-const CHAR_IMG = (id: number) => `/chars/${((id - 1) % 9) + 1}.png`;
+import { CharacterSummary, CompSummary } from "@/types";
 
 export async function fetchJSON<T>(
     url: string,

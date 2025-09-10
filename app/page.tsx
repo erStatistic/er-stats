@@ -1,9 +1,5 @@
 import HomeDashboard from "@/features/home/components/HomeDashboard";
-import {
-    fetchLatestPatch,
-    fetchTopCharacters,
-    fetchPopularComps,
-} from "@/lib/dashboard_data";
+import { fetchTopCharacters, fetchPopularComps } from "@/lib/dashboard_data";
 
 export const metadata = { title: "ER Nebi – 대시보드" };
 

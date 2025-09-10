@@ -1,6 +1,3 @@
-// 실제 연결 시 여기만 바꾸면 됩니다
-const API = process.env.NEXT_PUBLIC_API;
-
 export async function fetchJSON<T>(
     url: string,
     init?: RequestInit,

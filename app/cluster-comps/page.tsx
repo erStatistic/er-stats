@@ -1,5 +1,4 @@
 // app/cluster-combos/page.tsx
-import NavBar from "@/features/ui/NavBar";
 import ClusterCompsClient from "@/features/cluster-comps/components/ClusterCompsClient";
 import type { ClusterTriadSummary } from "@/types";
 

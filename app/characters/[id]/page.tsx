@@ -32,7 +32,7 @@ async function fetchJSON<T>(url: string) {
 
 async function getCharacter(id: number): Promise<ServerCharacter | null> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<any>(`${base}/api/v1/characters/${id}`);
+    const j = await fetchJSON<ApiResponse>(`${base}/api/v1/characters/${id}`);
     if (j?.code === 404 || !j?.data) return null;
     const d = j.data;
     return {
@@ -45,7 +45,7 @@ async function getCharacter(id: number): Promise<ServerCharacter | null> {
 
 async function getCharacterCws(characterId: number): Promise<VariantItem[]> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<any>(
+    const j = await fetchJSON<ApiResponse>(
         `${base}/api/v1/characters/${characterId}/cws`,
     );
     const rows = (j?.data ?? j ?? []) as any[];
@@ -165,30 +165,6 @@ async function routeToBuild(
         };
     }
 }
-async function getCharacterTierFromStats(id: number): Promise<string> {
-    const base = process.env.API_BASE_URL!;
-    // 🔎 너희 “캐릭터별 통계 테이블”에서 단일 캐릭 요약을 주는 엔드포인트를 연결해줘.
-    // (예시 1) /api/v1/analytics/characters/{id}/summary
-    // (예시 2) /api/v1/analytics/characters/row?id=...
-    const tryUrls = [
-        `${base}/api/v1/analytics/characters/${id}/summary`,
-        `${base}/api/v1/analytics/characters/${id}`,
-        `${base}/api/v1/characters/${id}/stats`,
-    ];
-    for (const url of tryUrls) {
-        try {
-            const j = await fetchJSON<any>(url);
-            const d = j?.data ?? j;
-            const t = d?.tier ?? d?.grade ?? d?.rankTier ?? d?.Tier ?? d?.Grade;
-            if (typeof t === "string" && t.trim())
-                return t.trim().toUpperCase();
-        } catch {
-            /* try next */
-        }
-    }
-    return "A"; // 폴백
-}
-
 async function buildsFromOverviewRoutes(overview: any): Promise<Build[]> {
     const routes = overview?.overview?.routes ?? [];
     if (!routes?.length) return [];
@@ -227,8 +203,6 @@ export default async function Page({
 
     const variants = await getCharacterCws(charId);
     if (!variants || variants.length === 0) notFound();
-
-    const tierFromStats = await getCharacterTierFromStats(charId);
 
     const sorted = [...variants].sort((a, b) => {
         const ac = a.weaponCode ?? Number.POSITIVE_INFINITY;

@@ -50,14 +50,6 @@ export const CLUSTER_COLOR: Record<string, string> = {
     U: "#FCA5A5",
 };
 
-// 3) 목 캐릭터 (실제에선 API에서 join해서 내려주면 됨)
-const mockNames = (seed: number, n: number) =>
-    Array.from({ length: n }).map((_, i) => ({
-        id: seed * 1000 + i + 1,
-        name: `실험체 ${seed}-${i + 1}`,
-        imageUrl: `/chars/${((seed + i) % 9) + 1}.png`,
-    }));
-
 // 4) 주신 no,kmeans를 압축해서 라벨만 사용 (실제에선 서버에서 join)
 //    아래는 데모용으로 각 라벨별 캐릭터 몇 명만 배치.
 const LABELS = [
