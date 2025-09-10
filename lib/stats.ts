@@ -1,4 +1,4 @@
-import { CharacterSummary, HoneyResult, SortDir, SortKey } from "@/types";
+import { SortDir, SortKey } from "@/types";
 
 export const TIER_ORDER = new Map<string, number>([
     ["S", 0],
