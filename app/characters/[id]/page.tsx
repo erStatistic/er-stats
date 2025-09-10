@@ -32,7 +32,7 @@ async function fetchJSON<T>(url: string) {
 
 async function getCharacter(id: number): Promise<ServerCharacter | null> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<ApiResponse>(`${base}/api/v1/characters/${id}`);
+    const j = await fetchJSON<any>(`${base}/api/v1/characters/${id}`);
     if (j?.code === 404 || !j?.data) return null;
     const d = j.data;
     return {
@@ -45,7 +45,7 @@ async function getCharacter(id: number): Promise<ServerCharacter | null> {
 
 async function getCharacterCws(characterId: number): Promise<VariantItem[]> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<ApiResponse>(
+    const j = await fetchJSON<any>(
         `${base}/api/v1/characters/${characterId}/cws`,
     );
     const rows = (j?.data ?? j ?? []) as any[];
@@ -165,6 +165,7 @@ async function routeToBuild(
         };
     }
 }
+
 async function buildsFromOverviewRoutes(overview: any): Promise<Build[]> {
     const routes = overview?.overview?.routes ?? [];
     if (!routes?.length) return [];
@@ -227,15 +228,12 @@ export default async function Page({
 
     const overview = selected ? await getCwOverview(selected.cwId) : null;
 
-    // ✅ 통계 테이블 기준 티어 주입
-
-    const rMinimal = {
+    // ✅ 통계 테이블 기준 티어 주입 (overview가 null이어도 안전)
+    const rMinimal: { id: number; name: string; tier: string | null } = {
         id: character.id,
         name: character.nameKr,
-        tier: overview.tier, // ⬅️ 요걸 TierFramedImage에 넘김
-    } as any;
-
-    console.log(rMinimal);
+        tier: overview?.tier ?? null, // ⬅️ 안전 접근으로 수정
+    };
 
     let builds: Build[] = [];
     if (overview) {

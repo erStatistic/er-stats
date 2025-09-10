@@ -9,13 +9,19 @@ export const metadata = { title: "ER Nebi – 클러스터 조합 통계" };
 type ServerClusterComboRow = {
     cluster_label: string; // "A · B · K"
     samples: number; // team_count
-    cluster_ids: number[]; // cluster_id
+    cluster_ids: number[]; // cluster_id[]
     wins: number;
     win_rate: number; // 0~1
     pick_rate: number; // 0~1
     avg_mmr: number; // 평균 MMR
     avg_survival: number | null; // 초
 };
+
+function toTriad(arr: string[]): [string, string, string] {
+    const a = arr.slice(0, 3);
+    while (a.length < 3) a.push("");
+    return [a[0] ?? "", a[1] ?? "", a[2] ?? ""];
+}
 
 async function fetchClusterCombos(opts: {
     tier?: string; // tiers.name or "All"
@@ -52,39 +58,55 @@ async function fetchClusterCombos(opts: {
         return [];
     }
 
-    const j = await res.json();
-    const rows: ServerClusterComboRow[] = (j.data ?? j) as any;
+    const payload = (await res.json()) as unknown;
+    const data = (payload as { data?: unknown })?.data ?? payload;
+    const rows: ServerClusterComboRow[] = Array.isArray(data)
+        ? (data as ServerClusterComboRow[])
+        : [];
 
-    return rows.map((r) => ({
-        clusters: r.cluster_label.split("·").map((s) => s.trim()),
-        clusterIds: r.cluster_ids,
-        winRate: r.win_rate,
-        pickRate: r.pick_rate,
-        mmrGain: r.avg_mmr,
-        survivalTime: r.avg_survival ?? undefined,
-        count: r.samples,
-        patch: "All", // 패치 테이블 붙기 전까지 All 고정
-        tier, // 현재 선택된 티어(또는 All)
-    }));
+    return rows.map<ClusterTriadSummary>((r) => {
+        const names = r.cluster_label.split("·").map((s) => s.trim());
+        const clusters = toTriad(names); // ✅ [string, string, string] 보장
+
+        return {
+            clusters,
+            clusterIds: r.cluster_ids,
+            winRate: r.win_rate,
+            pickRate: r.pick_rate,
+            mmrGain: r.avg_mmr,
+            survivalTime: r.avg_survival ?? undefined,
+            count: r.samples,
+            patch: "All", // 패치 테이블 붙기 전까지 All 고정
+            tier, // 현재 선택된 티어(또는 All)
+        };
+    });
 }
 
+// ✅ Next.js 15: searchParams는 Promise 형태
 export default async function ClusterCompsPage({
     searchParams,
 }: {
-    searchParams?: {
-        tier?: string;
-        minSamples?: string;
-        limit?: string;
-        offset?: string;
-    };
+    searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-    const sp = await searchParams;
-    const tier = sp.tier ?? "All";
-    const minSamples = Number.isNaN(Number(sp.minSamples))
+    const sp = (await searchParams) ?? {};
+
+    const first = <T,>(v: T | T[] | undefined): T | undefined =>
+        Array.isArray(v) ? v[0] : v;
+
+    const tier = first(sp.tier) ?? "All";
+
+    const minSamplesStr = first(sp.minSamples);
+    const minSamples = Number.isNaN(Number(minSamplesStr))
         ? 1000
-        : Number(sp.minSamples ?? 1000);
-    const limit = Number(sp.limit ?? 1000);
-    const offset = Number(sp.offset ?? 0);
+        : Number(minSamplesStr ?? 1000);
+
+    const limitStr = first(sp.limit);
+    const limit = Number.isNaN(Number(limitStr))
+        ? 1000
+        : Number(limitStr ?? 1000);
+
+    const offsetStr = first(sp.offset);
+    const offset = Number.isNaN(Number(offsetStr)) ? 0 : Number(offsetStr ?? 0);
 
     const initial = await fetchClusterCombos({
         tier,
@@ -95,8 +117,6 @@ export default async function ClusterCompsPage({
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
-            {/* 필요하면 NavBar 노출 */}
-            {/* <NavBar /> */}
             <ClusterCompsClient initial={initial} />
         </div>
     );

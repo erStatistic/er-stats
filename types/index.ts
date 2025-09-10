@@ -8,6 +8,12 @@ export type WeaponStat = {
     mmrGain: number; // per game avg
 };
 
+export type ApiResponse = {
+    code: number;
+    msg: string;
+    data?: any;
+};
+
 export type SortKey =
     | "tier"
     | "name"
