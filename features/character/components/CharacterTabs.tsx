@@ -1,3 +1,5 @@
+import { GameTier } from "@/features/types";
+
 export default function Tabs({
     value,
     onChange,

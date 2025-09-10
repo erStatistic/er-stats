@@ -21,6 +21,12 @@ export type ClientCwByCluster = {
     entries: ClientCwEntry[];
 };
 
+export type CwsByClusterEntry = {
+    clusterId: number;
+    label: string;
+    entries: CwEntry;
+};
+
 export async function clientGetCwByCluster(
     clusterId: number,
 ): Promise<ClientCwByCluster> {
@@ -29,29 +35,28 @@ export async function clientGetCwByCluster(
     if (!res.ok) throw new Error(`failed: ${res.status}`);
 
     const body = await res.json();
-    const data = body?.data ?? body;
+    const data = body?.data;
 
     // 서버 필드 → 프론트 정규화
     return {
-        clusterId: Number(data.ClusterID ?? data.clusterId ?? clusterId),
-        label: data.Label ?? data.label,
-        entries: (data.Entries ?? data.entries ?? []).map((e: any) => ({
-            cwId: e.CwID ?? e.cwId,
+        clusterId: Number(data.clusterId),
+        label: data.label,
+        entries: data.entries.map((e: CwsByClusterEntry) => ({
+            cwId: e.cwId,
             character: {
-                id: e.Character?.ID ?? e.character?.id,
-                name: e.Character?.Name ?? e.character?.name,
-                imageUrl: e.Character?.ImageURL ?? e.character?.imageUrl,
+                id: e.character?.id,
+                name: e.character?.name,
+                imageUrl: e.character?.imageUrl,
             },
             weapon: {
-                id: e.Weapon?.ID ?? e.weapon?.id,
-                code: e.Weapon?.Code ?? e.weapon?.code,
-                name: e.Weapon?.Name ?? e.weapon?.name,
-                imageUrl: e.Weapon?.ImageURL ?? e.weapon?.imageUrl,
+                code: e.weapon?.code,
+                name: e.weapon?.name,
+                imageUrl: e.weapon?.imageUrl,
             },
-            position: e.Position
+            position: e.position
                 ? {
-                      id: e.Position?.ID ?? e.position?.id,
-                      name: e.Position?.Name ?? e.position?.name,
+                      id: e.position?.id,
+                      name: e.position?.name,
                   }
                 : undefined,
         })),
@@ -59,12 +64,11 @@ export async function clientGetCwByCluster(
 }
 
 // lib/api.ts
-export type DbCharacterLite = {
+export type Character = {
     id: number;
     name: string;
     imageUrlMini?: string;
     imageUrlFull?: string;
-    role?: string | null; // DB에 있으면 사용
 };
 
 export async function serverListCharacters(): Promise<DbCharacterLite[]> {
@@ -81,12 +85,11 @@ export async function serverListCharacters(): Promise<DbCharacterLite[]> {
     const rows = body?.data ?? body;
 
     // 대→소문자 정규화
-    return (rows as any[]).map((d) => ({
+    return (rows as Character[]).map((d) => ({
         id: Number(d.ID ?? d.id),
         name: d.name_kr ?? "",
         imageUrlMini: d.image_url_mini ?? "",
         imageUrlFull: d.image_url_full ?? "",
-        role: d.Role ?? d.role ?? null,
     }));
 }
 

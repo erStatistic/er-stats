@@ -7,23 +7,27 @@ export const revalidate = 0;
 export const metadata = { title: "ER Nebi – 클러스터 조합 통계" };
 
 type ServerClusterComboRow = {
-    cluster_label: string; // "A · B · K"
-    samples: number; // team_count
-    cluster_ids: number[]; // cluster_id
+    cluster_label: string;
+    samples: number;
+    cluster_ids: number[];
     wins: number;
-    win_rate: number; // 0~1
-    pick_rate: number; // 0~1
-    avg_mmr: number; // 평균 MMR
-    avg_survival: number | null; // 초
+    win_rate: number;
+    pick_rate: number;
+    avg_mmr: number;
+    avg_survival: number | null;
 };
+function toTriad<T>(arr: T[] | null | undefined, fallback: T): [T, T, T] {
+    const a = Array.isArray(arr) ? arr : [];
+    return [a[0] ?? fallback, a[1] ?? fallback, a[2] ?? fallback];
+}
 
 async function fetchClusterCombos(opts: {
-    tier?: string; // tiers.name or "All"
-    minSamples?: number; // 없거나 0이면 SQL 기본 50
+    tier?: string;
+    minSamples?: number;
     limit?: number;
     offset?: number;
 }): Promise<ClusterTriadSummary[]> {
-    const base = process.env.API_BASE_URL; // 예: http://localhost:3333
+    const base = process.env.API_BASE_URL;
     if (!base) throw new Error("API_BASE_URL is not set");
 
     const tier = opts.tier ?? "All";
@@ -43,7 +47,6 @@ async function fetchClusterCombos(opts: {
     });
 
     if (!res.ok) {
-        // 실패 시 빈 배열 반환(페이지는 정상 렌더)
         console.error(
             "[cluster-combos] fetch failed:",
             res.status,
@@ -53,38 +56,62 @@ async function fetchClusterCombos(opts: {
     }
 
     const j = await res.json();
-    const rows: ServerClusterComboRow[] = (j.data ?? j) as any;
+    const rows: ServerClusterComboRow[] = Array.isArray(j?.data) ? j.data : [];
 
-    return rows.map((r) => ({
-        clusters: r.cluster_label.split("·").map((s) => s.trim()),
-        clusterIds: r.cluster_ids,
-        winRate: r.win_rate,
-        pickRate: r.pick_rate,
-        mmrGain: r.avg_mmr,
-        survivalTime: r.avg_survival ?? undefined,
-        count: r.samples,
-        patch: "All", // 패치 테이블 붙기 전까지 All 고정
-        tier, // 현재 선택된 티어(또는 All)
-    }));
+    return rows.map<ClusterTriadSummary>((r) => {
+        // "A · B · K" → ["A","B","K"] → 튜플 [a,b,c]로 보정
+        const labels = r.cluster_label
+            .split("·")
+            .map((s: string) => s.trim())
+            .filter(Boolean);
+        const clusters = toTriad<string>(labels, ""); // [string,string,string]
+
+        // 서버가 3개를 보장 못할 수도 있으니 보정
+        const clusterIds = toTriad<number>(r.cluster_ids, 0); // [number,number,number]
+
+        return {
+            clusters, // [string, string, string]
+            clusterIds, // [number, number, number]
+            winRate: r.win_rate,
+            pickRate: r.pick_rate,
+            mmrGain: r.avg_mmr,
+            survivalTime: r.avg_survival ?? undefined,
+            count: r.samples,
+            patch: "All",
+            tier,
+        };
+    });
 }
-
+// ✅ Next.js 15 스타일: searchParams는 Promise 타입으로 받고 await 해서 사용
 export default async function ClusterCompsPage({
     searchParams,
 }: {
-    searchParams?: {
-        tier?: string;
-        minSamples?: string;
-        limit?: string;
-        offset?: string;
-    };
+    searchParams?: Promise<{
+        tier?: string | string[];
+        minSamples?: string | string[];
+        limit?: string | string[];
+        offset?: string | string[];
+    }>;
 }) {
-    const sp = await searchParams;
-    const tier = sp.tier ?? "All";
-    const minSamples = Number.isNaN(Number(sp.minSamples))
+    const sp = (await searchParams) ?? {};
+
+    const first = <T,>(v: T | T[] | undefined): T | undefined =>
+        Array.isArray(v) ? v[0] : v;
+
+    const tier = first(sp.tier) ?? "All";
+
+    const minSamplesStr = first(sp.minSamples);
+    const minSamples = Number.isNaN(Number(minSamplesStr))
         ? 1000
-        : Number(sp.minSamples ?? 1000);
-    const limit = Number(sp.limit ?? 1000);
-    const offset = Number(sp.offset ?? 0);
+        : Number(minSamplesStr ?? 1000);
+
+    const limitStr = first(sp.limit);
+    const limit = Number.isNaN(Number(limitStr))
+        ? 1000
+        : Number(limitStr ?? 1000);
+
+    const offsetStr = first(sp.offset);
+    const offset = Number.isNaN(Number(offsetStr)) ? 0 : Number(offsetStr ?? 0);
 
     const initial = await fetchClusterCombos({
         tier,
@@ -95,8 +122,6 @@ export default async function ClusterCompsPage({
 
     return (
         <div className="mx-auto max-w-6xl px-4 py-6">
-            {/* 필요하면 NavBar 노출 */}
-            {/* <NavBar /> */}
             <ClusterCompsClient initial={initial} />
         </div>
     );

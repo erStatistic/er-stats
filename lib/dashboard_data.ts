@@ -13,7 +13,7 @@ export async function getCharacter(
     id: number,
 ): Promise<ServerCharacter | null> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<any>(`${base}/api/v1/characters/${id}`);
+    const j = await fetchJSON<ApiResponse>(`${base}/api/v1/characters/${id}`);
     if (j?.code === 404 || !j?.data) return null;
     const d = j.data;
     return {
@@ -23,7 +23,6 @@ export async function getCharacter(
         imageUrlFull: (d.image_url_full ?? "").trim(),
     };
 }
-
 export async function fetchTopCharacters(
     count = 5,
 ): Promise<CharacterSummary[]> {
@@ -35,7 +34,8 @@ export async function fetchTopCharacters(
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
-        const rows = (json?.data as any[]) ?? [];
+        const rows = json?.data as CharacterSummary[];
+        console.log(rows);
         const top = rows.slice(0, count);
 
         const ids = Array.from(new Set<number>(top.map((r) => r.character_id)));

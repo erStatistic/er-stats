@@ -1,6 +1,7 @@
 // app/cluster-dict/page.tsx  (Server Component)
 import ClusterDirectoryClient from "@/features/cluster-dict/components/ClusterDirectoryClient";
 import { ssrGetCwDirectory } from "@/lib/server-api";
+import { CwDirectoryHeader } from "@/features/cluster-dict/components/ClusterDirectoryClient";
 
 export const metadata = { title: "ER Nebi – 군집(클러스터) 디렉터리" };
 export const revalidate = 300; // ISR: 5분마다 재검증 (원하는 주기로 변경)
@@ -18,7 +19,7 @@ export default async function ClustersPage() {
                 역할 탭과 검색을 이용해 빠르게 찾아보세요.
             </p>
             {/* ✅ SSR된 헤더를 클라이언트 컴포넌트로 전달 */}
-            <ClusterDirectoryClient initial={headers as any} />
+            <ClusterDirectoryClient initial={headers as CwDirectoryHeader[]} />
         </div>
     );
 }

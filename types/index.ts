@@ -17,6 +17,19 @@ export type SortKey =
     | "mmrGain"
     | "survivalTime"; // ✅ 추가
 
+export type SortDir = "asc" | "desc";
+
+export type Role =
+    | "탱커"
+    | "탱 브루저"
+    | "딜 브루저"
+    | "암살자"
+    | "평원딜"
+    | "스증 마법사"
+    | "서포터"
+    | "컨트롤"
+    | "기타";
+
 export interface CharacterSummary {
     id: number;
     name: string;
@@ -28,8 +41,6 @@ export interface CharacterSummary {
     tier: string;
     rankTier?: string;
     imageUrl?: string;
-
-    /** ✅ 게임당 평균 생존시간(초 또는 "mm:ss"/"hh:mm:ss") */
     survivalTime?: number | string;
 }
 

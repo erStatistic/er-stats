@@ -6,10 +6,9 @@ import {
     computeTop10Threshold,
     formatMMR,
     formatPercent,
-    sortRows,
     formatDuration,
     parseDurationToSec,
-} from "@/lib/stats";
+} from "@/lib/stats"; // ← sortRows 임포트는 없습니다
 import TierPill from "@/features/ui/TierPill";
 import HoneyBadge from "@/features/ui/HoneyBadge";
 
@@ -20,6 +19,53 @@ type RowLike = CharacterSummary & {
     s_score?: number; // snake_case 대응
     sScore?: number; // camelCase 대응
 };
+
+/** unknown → string | number | undefined 로 안전 변환 (null → undefined) */
+function coerceSN(v: unknown): string | number | undefined {
+    if (v == null) return undefined;
+    const t = typeof v;
+    return t === "string" || t === "number"
+        ? (v as string | number)
+        : undefined;
+}
+
+/** 로컬 정렬 유틸: SortKey에 맞춰 안전하게 정렬 (문자/숫자/생존시간) */
+function localSortRows<T extends Record<SortKey, unknown>>(
+    rows: T[],
+    key: SortKey,
+    dir: SortDir,
+): T[] {
+    const arr = [...rows];
+    const mul = dir === "asc" ? 1 : -1;
+
+    arr.sort((a, b) => {
+        const av = a[key];
+        const bv = b[key];
+
+        // 생존시간: "hh:mm:ss" | "mm:ss" | number | undefined → 초 단위 비교
+        if (key === "survivalTime") {
+            const as = parseDurationToSec(coerceSN(av));
+            const bs = parseDurationToSec(coerceSN(bv));
+            const na = as ?? -Infinity;
+            const nb = bs ?? -Infinity;
+            return (na - nb) * mul;
+        }
+
+        // 문자열 비교 우선
+        if (typeof av === "string" || typeof bv === "string") {
+            const sa = String(av ?? "");
+            const sb = String(bv ?? "");
+            return sa.localeCompare(sb) * mul;
+        }
+
+        // 숫자 비교 (null/undefined/NaN → -∞ 취급)
+        const na = Number(av ?? -Infinity);
+        const nb = Number(bv ?? -Infinity);
+        return (na - nb) * mul;
+    });
+
+    return arr;
+}
 
 export default function CharacterTable({
     rows,
@@ -68,7 +114,11 @@ export default function CharacterTable({
                     : scoreOf(b) - scoreOf(a),
             );
         }
-        return sortRows(rows, sortKey, sortDir);
+        return localSortRows(
+            rows as Array<Record<SortKey, unknown>>,
+            sortKey,
+            sortDir,
+        ) as CharacterSummary[];
     }, [rows, sortKey, sortDir]);
 
     const labelFor = (col: SortKey) =>
@@ -135,7 +185,7 @@ export default function CharacterTable({
                         const charId = row.characterId ?? r.id;
                         const weaponId = row.weaponId;
                         const key = `${charId}-${weaponId ?? r.weapon}-${i}`;
-                        const sec = parseDurationToSec(r.survivalTime as any);
+                        const sec = parseDurationToSec(r.survivalTime);
 
                         const showHoney = isRuleHoney(r); // ✅ 규칙만 사용
 
@@ -198,18 +248,18 @@ export default function CharacterTable({
                 {(
                     computeTop10Threshold(rows.map((r) => r.winRate)) * 100
                 ).toFixed(1)}
-                % · pick ≈{" "}
+                %{" · "}
+                pick ≈{" "}
                 {(
                     computeTop10Threshold(rows.map((r) => r.pickRate)) * 100
                 ).toFixed(2)}
-                % · MMR ≈{" "}
+                %{" · "}
+                MMR ≈{" "}
                 {computeTop10Threshold(rows.map((r) => r.mmrGain)).toFixed(1)}
                 {hasSurvival &&
                     (() => {
                         const secs = rows
-                            .map((r) =>
-                                parseDurationToSec(r.survivalTime as any),
-                            )
+                            .map((r) => parseDurationToSec(r.survivalTime))
                             .filter((x): x is number => x != null);
                         if (!secs.length) return null;
                         const p90 = computeTop10Threshold(secs);

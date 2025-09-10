@@ -3,16 +3,14 @@ import { notFound } from "next/navigation";
 import CharacterDetailClient from "@/features/characterDetail/components/CharacterDetailClient";
 import { mockTeamsFor } from "@/lib/mock";
 import type { Build } from "@/types";
-
+import { Stats, RouteInfo } from "@/features/characterDetail/types";
+import {
+    MinimalR,
+    CharacterWeaponOverview,
+} from "@/features/characterDetail/types";
+import { ServerCharacter } from "@/features/characterDetail/types";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-type ServerCharacter = {
-    id: number;
-    nameKr: string;
-    imageUrlMini?: string;
-    imageUrlFull?: string;
-};
 
 type VariantItem = {
     cwId: number;
@@ -21,6 +19,45 @@ type VariantItem = {
     weaponImageUrl?: string;
 };
 
+type ApiResponse<T = unknown> = {
+    code?: number;
+    msg?: string;
+    data?: T;
+};
+
+type Summary = {
+    games: number;
+    winRate: number;
+    pickRate: number;
+    mmrGain: number;
+    survivalSec: number;
+};
+
+/* ---------- tiny helpers (no any) ---------- */
+const asRecord = (x: unknown): Record<string, unknown> =>
+    x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+
+const numOr = (v: unknown, fb = 0): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
+        return Number(v);
+    return fb;
+};
+
+const strOr = (v: unknown, fb = ""): string => (typeof v === "string" ? v : fb);
+
+const pick = (
+    rec: Record<string, unknown>,
+    keys: string[],
+    fb?: unknown,
+): unknown => {
+    for (const k of keys) {
+        if (k in rec && rec[k] !== undefined && rec[k] !== null) return rec[k];
+    }
+    return fb;
+};
+
+/* ---------- fetch JSON with generic ---------- */
 async function fetchJSON<T>(url: string) {
     const res = await fetch(url, {
         cache: "no-store",
@@ -30,128 +67,167 @@ async function fetchJSON<T>(url: string) {
     return (await res.json()) as T;
 }
 
+/* ---------- character ---------- */
 async function getCharacter(id: number): Promise<ServerCharacter | null> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<ApiResponse>(`${base}/api/v1/characters/${id}`);
+    const j = await fetchJSON<ApiResponse<unknown>>(
+        `${base}/api/v1/characters/${id}`,
+    );
     if (j?.code === 404 || !j?.data) return null;
-    const d = j.data;
+
+    const d = asRecord(j.data);
+    const idNum = numOr(pick(d, ["ID", "id"]), NaN);
+    if (!Number.isFinite(idNum)) return null;
+
     return {
-        id: d.ID ?? d.id,
-        nameKr: d.name_kr ?? "이름 없음",
-        imageUrlMini: (d.image_url_mini ?? "").trim(),
-        imageUrlFull: (d.image_url_full ?? "").trim(),
+        id: idNum,
+        nameKr: strOr(pick(d, ["name_kr"]), "이름 없음"),
+        imageUrlMini: strOr(pick(d, ["image_url_mini"]), "").trim(),
+        imageUrlFull: strOr(pick(d, ["image_url_full"]), "").trim(),
     };
 }
+
+/* ---------- character → CWs (variants) ---------- */
+type CwsResponse = {
+    cwId: number;
+    weapon: {
+        code: number;
+        name: string;
+        imageUrl: string;
+    };
+};
 
 async function getCharacterCws(characterId: number): Promise<VariantItem[]> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<ApiResponse>(
+    const j = await fetchJSON<ApiResponse<unknown>>(
         `${base}/api/v1/characters/${characterId}/cws`,
     );
-    const rows = (j?.data ?? j ?? []) as any[];
+
+    const data = j?.data;
+    const rows: CwsResponse[] = Array.isArray(data)
+        ? (data as CwsResponse[])
+        : [];
+
     return rows.map((r) => ({
-        cwId: Number(r.cwId ?? r.CwID ?? r.id),
-        weapon:
-            r.weapon?.name ??
-            r.Weapon?.NameKr ??
-            r.Weapon?.name ??
-            r.weaponName ??
-            "",
-        weaponCode: r.weapon?.code ?? r.Weapon?.Code ?? r.weaponCode,
-        weaponImageUrl:
-            r.weapon?.imageUrl ?? r.Weapon?.ImageURL ?? r.weaponImageUrl,
+        cwId: Number(r.cwId),
+        weapon: r.weapon.name,
+        weaponCode: r.weapon.code,
+        weaponImageUrl: r.weapon.imageUrl,
     }));
 }
 
-async function getCwOverview(cwId: number) {
+/* ---------- CW overview ---------- */
+async function getCwOverview(
+    cwId: number,
+): Promise<CharacterWeaponOverview | undefined> {
     const base = process.env.API_BASE_URL!;
-    const j = await fetchJSON<any>(`${base}/api/v1/cws/${cwId}/overview`);
-    const d = j?.data;
-    if (!d) return null;
+    const j = await fetchJSON<ApiResponse<unknown>>(
+        `${base}/api/v1/cws/${cwId}/overview`,
+    );
+    const d = asRecord(j?.data);
+    if (!j?.data) return undefined;
 
-    const clusters: string[] = d.cluster?.name ? [String(d.cluster.name)] : [];
+    // cluster name
+    const clusterRec = asRecord(d["cluster"]);
+    const clusterName = strOr(clusterRec["name"]);
+    const clusters = clusterName ? [clusterName] : [];
 
-    const rawSum = d.overview?.summary ?? {};
-    const summary = {
-        games: rawSum.games ?? rawSum.Games ?? 0,
-        winRate: rawSum.winRate ?? rawSum.WinRate ?? 0,
-        pickRate: rawSum.pickRate ?? rawSum.PickRate ?? 0,
-        mmrGain: rawSum.mmrGain ?? rawSum.MMRGain ?? 0,
-        survivalSec: rawSum.survivalSec ?? rawSum.SurvivalSec ?? 0,
+    // summary
+    const sumRec = asRecord(asRecord(d["overview"])["summary"]);
+    const summary: Summary = {
+        games: numOr(pick(sumRec, ["games", "Games"]), 0),
+        winRate: numOr(pick(sumRec, ["winRate", "WinRate"]), 0),
+        pickRate: numOr(pick(sumRec, ["pickRate", "PickRate"]), 0),
+        mmrGain: numOr(pick(sumRec, ["mmrGain", "MMRGain"]), 0),
+        survivalSec: numOr(pick(sumRec, ["survivalSec", "SurvivalSec"]), 0),
     };
 
-    const rawStats = d.overview?.stats ?? {};
-    const stats = {
-        atk: rawStats.atk ?? rawStats.ATK ?? 0,
-        def: rawStats.def ?? rawStats.DEF ?? 0,
-        cc: rawStats.cc ?? rawStats.CC ?? 0,
-        spd: rawStats.spd ?? rawStats.SPD ?? 0,
-        sup: rawStats.sup ?? rawStats.SUP ?? 0,
+    // stats
+    const statsRec = asRecord(asRecord(d["overview"])["stats"]);
+    const stats: Stats = {
+        atk: numOr(pick(statsRec, ["atk", "ATK"]), 0),
+        def: numOr(pick(statsRec, ["def", "DEF"]), 0),
+        cc: numOr(pick(statsRec, ["cc", "CC"]), 0),
+        spd: numOr(pick(statsRec, ["spd", "SPD"]), 0),
+        sup: numOr(pick(statsRec, ["sup", "SUP"]), 0),
     };
 
-    const rawRoutes = Array.isArray(d.overview?.routes)
-        ? d.overview.routes
+    // routes
+    const routesRaw = asRecord(d["overview"])["routes"];
+    const routes: RouteInfo[] = Array.isArray(routesRaw)
+        ? (routesRaw as unknown[]).reduce<RouteInfo[]>((acc, r) => {
+              const rec = asRecord(r);
+              const id = numOr(pick(rec, ["id", "ID"]), NaN);
+              if (!Number.isFinite(id)) return acc;
+              const title = strOr(pick(rec, ["title", "Title"]), "추천 경로");
+              acc.push({ id, title });
+              return acc;
+          }, [])
         : [];
-    const routes = rawRoutes
-        .map((r: any) => ({
-            id: Number(r.id ?? r.ID),
-            title: String(r.title ?? r.Title ?? "추천 경로"),
-        }))
-        .filter((r: any) => Number.isFinite(r.id));
+
+    // character, weapon, position
+    const charRec = asRecord(d["character"]);
+    const weaponRec = asRecord(d["weapon"]);
+    const posRec = asRecord(d["position"]);
 
     return {
-        cwId: d.cwId,
-        tier: d.tier,
+        cwId: numOr(d["cwId"], cwId),
+        tier: strOr(d["tier"]) || undefined,
         character: {
-            id: d.character?.id,
-            name: d.character?.name,
-            imageUrl: d.character?.imageUrl ?? "",
+            id: numOr(charRec["id"], 0),
+            name: strOr(charRec["name"]),
+            imageUrl: strOr(charRec["imageUrl"]),
         },
         weapon: {
-            code: d.weapon?.code,
-            name: d.weapon?.name,
-            imageUrl: d.weapon?.imageUrl ?? "",
+            code: numOr(weaponRec["code"], 0),
+            name: strOr(weaponRec["name"]),
+            imageUrl: strOr(weaponRec["imageUrl"]),
         },
-        position: d.position
-            ? { id: d.position.id, name: d.position.name }
-            : undefined,
+        position:
+            "id" in posRec || "name" in posRec
+                ? { id: numOr(posRec["id"], 0), name: strOr(posRec["name"]) }
+                : undefined,
         clusters,
         overview: { summary, stats, routes },
     };
 }
 
+/* ---------- route → Build ---------- */
 async function routeToBuild(
     routeId: number,
     titleFallback: string,
 ): Promise<Build> {
     const base = process.env.API_BASE_URL!;
     try {
-        const j = await fetchJSON<any>(`${base}/api/v1/routes/${routeId}`);
-        const d = j?.data ?? j;
+        const j = await fetchJSON<ApiResponse<unknown>>(
+            `${base}/api/v1/routes/${routeId}`,
+        );
+        const d = asRecord(j?.data ?? j);
 
-        const title =
-            d?.title ?? d?.Title ?? titleFallback ?? `추천 #${routeId}`;
-        const desc = d?.description ?? d?.desc ?? "경로 기반 추천";
+        const title = strOr(
+            pick(d, ["title", "Title"], titleFallback || `추천 #${routeId}`),
+        );
+        const desc = strOr(pick(d, ["description", "desc"], "경로 기반 추천"));
 
-        const rawItems =
-            d?.items ??
-            d?.steps ??
-            d?.build ??
-            d?.routeSteps ??
-            d?.materials ??
-            [];
+        const rawItems = pick(
+            d,
+            ["items", "steps", "build", "routeSteps", "materials"],
+            [],
+        );
+        let items: string[] = [];
+        if (Array.isArray(rawItems)) {
+            items = (rawItems as unknown[]).map((x) => String(x));
+        } else if (typeof rawItems === "string") {
+            items = rawItems
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+        }
 
-        const items = Array.isArray(rawItems)
-            ? rawItems.map((x: any) => String(x))
-            : typeof rawItems === "string"
-              ? rawItems
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-              : [];
+        const idVal = pick(d, ["id", "ID"], routeId);
 
         return {
-            id: String(d?.id ?? d?.ID ?? routeId),
+            id: String(idVal),
             title: String(title),
             description: String(desc),
             items,
@@ -165,11 +241,14 @@ async function routeToBuild(
         };
     }
 }
-async function buildsFromOverviewRoutes(overview: any): Promise<Build[]> {
-    const routes = overview?.overview?.routes ?? [];
-    if (!routes?.length) return [];
+
+async function buildsFromOverviewRoutes(
+    overview: NonNullable<CharacterWeaponOverview>,
+): Promise<Build[]> {
+    const routes = overview.overview.routes;
+    if (!routes.length) return [];
     const selected = routes.slice(0, 4);
-    return Promise.all(selected.map((r: any) => routeToBuild(r.id, r.title)));
+    return Promise.all(selected.map((r) => routeToBuild(r.id, r.title)));
 }
 
 /** Next App Router: params/searchParams는 Promise */
@@ -225,17 +304,13 @@ export default async function Page({
 
     const currentWeapon = selected?.weapon ?? sorted[0].weapon;
 
-    const overview = selected ? await getCwOverview(selected.cwId) : null;
+    const overview = selected ? await getCwOverview(selected.cwId) : undefined;
 
-    // ✅ 통계 테이블 기준 티어 주입
-
-    const rMinimal = {
+    const rMinimal: MinimalR = {
         id: character.id,
         name: character.nameKr,
-        tier: overview.tier, // ⬅️ 요걸 TierFramedImage에 넘김
-    } as any;
-
-    console.log(rMinimal);
+        tier: overview?.tier ?? null,
+    };
 
     let builds: Build[] = [];
     if (overview) {

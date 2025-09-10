@@ -11,7 +11,8 @@ export type SortKey =
     | "mmrGain"
     | "survivalTime"
     | "count";
-type SortDir = "asc" | "desc";
+
+export type SortDir = "asc" | "desc";
 
 export type TriadRef = { ids: number[]; text: string };
 

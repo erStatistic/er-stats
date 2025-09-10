@@ -1,5 +1,5 @@
 import { CharacterSummary } from "@/types";
-import { GameTier } from "./types";
+import { GameTier } from "@/features/types";
 import { GAME_TIERS } from "@/features";
 
 export function getRankTier(r: CharacterSummary): GameTier {

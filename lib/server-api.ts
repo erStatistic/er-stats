@@ -12,7 +12,15 @@ export type CwDirectoryHeader = {
     role: string;
     counts: { cws: number; characters: number };
 };
-
+// {
+//            "clusterId": 1,
+//            "label": "A",
+//            "role": "딜 브루저",
+//            "counts": {
+//                "cws": 17,
+//                "characters": 14
+//            }
+//        },
 export async function ssrGetCwDirectory(): Promise<CwDirectoryHeader[]> {
     const base = process.env.API_BASE_URL; // 예: http://localhost:3333
     if (!base) throw new Error("API_BASE_URL is not set");
@@ -23,21 +31,16 @@ export async function ssrGetCwDirectory(): Promise<CwDirectoryHeader[]> {
     });
     if (!res.ok) throw new Error(`failed: ${res.status}`);
     const body = await res.json();
-    const rows = (body?.data ?? body) as any[];
+    const rows = (body?.data ?? body) as CwDirectoryHeader[];
 
     // 정규화
     return rows.map((r) => ({
-        clusterId: r.ClusterID ?? r.clusterId ?? r.id,
-        label: r.Label ?? r.label,
-        role: r.Role ?? r.role ?? "기타",
+        clusterId: r.clusterId,
+        label: r.label,
+        role: r.role,
         counts: {
-            cws: Number(r.counts?.Cws ?? r.counts?.cws ?? r.cws ?? 0),
-            characters: Number(
-                r.counts?.characters ??
-                    r.counts?.characters ??
-                    r.characters ??
-                    0,
-            ),
+            cws: Number(r.counts?.cws),
+            characters: Number(r.counts?.characters),
         },
     }));
 }
@@ -56,45 +59,6 @@ export type CwVariant = {
     position?: { id: number; name: string };
 };
 
-export type CwOverview = {
-    cwId: number;
-    character: { id: number; name: string; imageUrl?: string };
-    weapon: { code: number; name: string; imageUrl?: string };
-    position: { id: number; name: string };
-    overview: {
-        summary: {
-            games: number;
-            pickRate: number;
-            winRate: number;
-            avgMmrDelta: number;
-        };
-        builds: any[];
-        teams: any[];
-    };
-};
-
-function j<T>(x: any): T {
-    return x?.data ?? x;
-}
-
-/** 캐릭터 단건 */
-export async function ssrGetCharacter(id: number): Promise<Character | null> {
-    const base = process.env.API_BASE_URL;
-    const res = await fetch(`${base}/api/v1/characters/${id}`, {
-        cache: "no-store",
-        headers: { accept: "application/json" },
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`character ${id} ${res.status}`);
-    const body = j<any>(await res.json());
-    return {
-        id: Number(body.ID ?? body.id),
-        nameKr: body.NameKr ?? body.nameKr ?? "",
-        imageUrlMini: (body.ImageUrlMini ?? body.imageUrlMini ?? "").trim(),
-        imageUrlFull: (body.ImageUrlFull ?? body.imageUrlFull ?? "").trim(),
-    };
-}
-
 /** 캐릭터가 가진 CW(= 캐릭터×무기 조합) 목록 */
 export async function ssrGetCharacterCws(id: number): Promise<CwVariant[]> {
     const base = process.env.API_BASE_URL;
@@ -104,7 +68,7 @@ export async function ssrGetCharacterCws(id: number): Promise<CwVariant[]> {
         headers: { accept: "application/json" },
     });
     if (!res.ok) throw new Error(`character cws ${id} ${res.status}`);
-    const arr = j<any[]>(await res.json()) ?? [];
+    const arr = j<CwVariant[]>(await res.json()) ?? [];
     return arr.map((e) => ({
         cwId: Number(e.cwId ?? e.CwID ?? e.id),
         weapon: {
@@ -143,75 +107,3 @@ export type CwOverview = {
         sup: number; // 0~5
     };
 };
-
-// 숫자 변환 유틸(문자/undefined 방어)
-const toNum = (v: unknown) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
-};
-
-export async function ssrGetCwOverview(cwId: number): Promise<CwOverview> {
-    const base = process.env.NEXT_PUBLIC_API_BASE;
-    const res = await fetch(`${base}/cws/${cwId}/overview`, {
-        // 개별 요청마다 최신값 원하면 no-store, 아니라면 revalidate 옵션 사용
-        cache: "no-store",
-        headers: { accept: "application/json" },
-    });
-    if (!res.ok) throw new Error(`overview failed: ${res.status}`);
-
-    const body = await res.json();
-    const d = body?.data ?? body;
-
-    // 다양한 케이스 대비한 느슨한 맵핑
-    const character = d.character ?? d.Character ?? {};
-    const weapon = d.weapon ?? d.Weapon ?? {};
-    const position = d.position ?? d.Position ?? undefined;
-    const summary = d.summary ?? d.Summary ?? undefined;
-    const stats = d.stats ?? d.Stats ?? undefined;
-
-    return {
-        cwId: Number(d.cwId ?? d.CwID ?? d.cw_id ?? cwId),
-        character: {
-            id: Number(character.id ?? character.ID),
-            name: String(character.name ?? character.Name ?? ""),
-            imageUrl: String(character.imageUrl ?? character.ImageURL ?? ""),
-        },
-        weapon: {
-            code: Number(weapon.code ?? weapon.Code),
-            name: String(weapon.name ?? weapon.Name ?? ""),
-            imageUrl: String(weapon.imageUrl ?? weapon.ImageURL ?? ""),
-        },
-        position: position
-            ? {
-                  id:
-                      position.id ??
-                      position.ID ??
-                      (position.p_id != null ? Number(position.p_id) : null),
-                  name: String(
-                      position.name ?? position.Name ?? position.p_name ?? "",
-                  ),
-              }
-            : undefined,
-        summary: summary
-            ? {
-                  winRate: toNum((summary.winRate ?? summary.win_rate) as any),
-                  pickRate: toNum(
-                      (summary.pickRate ?? summary.pick_rate) as any,
-                  ),
-                  mmrGain: toNum((summary.mmrGain ?? summary.mmr_gain) as any),
-                  survivalSec: toNum(
-                      (summary.survivalSec ?? summary.avg_survival_sec) as any,
-                  ),
-              }
-            : undefined,
-        stats: stats
-            ? {
-                  atk: Number(stats.atk ?? stats.ATK ?? 0),
-                  def: Number(stats.def ?? stats.DEF ?? 0),
-                  cc: Number(stats.cc ?? stats.CC ?? 0),
-                  spd: Number(stats.spd ?? stats.SPD ?? 0),
-                  sup: Number(stats.sup ?? stats.SUP ?? 0),
-              }
-            : undefined,
-    };
-}

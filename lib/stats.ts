@@ -1,4 +1,4 @@
-import { SortDir, SortKey } from "@/types";
+import type { SortDir, SortKey } from "@/types";
 
 export const TIER_ORDER = new Map<string, number>([
     ["S", 0],
@@ -6,8 +6,6 @@ export const TIER_ORDER = new Map<string, number>([
     ["B", 2],
     ["C", 3],
 ]);
-
-import type { SortDir, SortKey } from "@/types";
 
 export function formatDuration(sec?: number): string {
     if (sec == null || isNaN(sec)) return "—";
@@ -31,7 +29,7 @@ export function parseDurationToSec(
     return null;
 }
 
-export function sortRows<T extends Record<string, any>>(
+export function sortRows<T extends Record<string, string>>(
     rows: T[],
     key: SortKey,
     dir: SortDir,
@@ -65,6 +63,7 @@ export function sortRows<T extends Record<string, any>>(
 
     return arr;
 }
+
 export function formatPercent(v: number, digits = 1) {
     if (!isFinite(v)) return "0.0%";
     return `${(v * 100).toFixed(digits)}%`;
@@ -74,21 +73,6 @@ export function formatMMR(v: number, digits = 1) {
     if (!isFinite(v)) return "0.0";
     return `${Number(v).toFixed(digits)}`;
 }
-
-// export function sortRows(rows: CharacterSummary[], key: SortKey, dir: SortDir) {
-//     const mul = dir === "asc" ? 1 : -1;
-//     return [...rows].sort((a, b) => {
-//         let va: any = (a as any)[key];
-//         let vb: any = (b as any)[key];
-//         if (key === "tier") {
-//             va = TIER_ORDER.get(String(va)) ?? Number.POSITIVE_INFINITY;
-//             vb = TIER_ORDER.get(String(vb)) ?? Number.POSITIVE_INFINITY;
-//         }
-//         if (typeof va === "number" && typeof vb === "number")
-//             return (va - vb) * mul;
-//         return String(va).localeCompare(String(vb)) * mul;
-//     });
-// }
 
 export function computeTop10Threshold(values: number[]) {
     if (!values.length) return Infinity;

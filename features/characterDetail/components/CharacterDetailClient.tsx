@@ -6,13 +6,17 @@ import VariantPill from "@/features/ui/VariantPill";
 import { Build, TeamComp, CharacterSummary, Role } from "@/types";
 import { formatMMR, formatPercent, formatDuration } from "@/lib/stats";
 import { mockBuildsFor, mockTeamsFor } from "@/lib/mock";
-import ServerCharacter from "@/features/characterDetail/types";
+import { ServerCharacter } from "@/features/characterDetail/types";
 import TierFramedImage from "@/features/characterDetail/components/TierFramedImage";
 import RadarChart from "@/features/characterDetail/components/RadarChart";
 import MiniLineChart from "@/features/characterDetail/components/MiniLineChart";
 import KpiCard from "@/features/characterDetail/components/KpiCard";
 import ClusterBadge from "@/features/cluster-dict/components/ClusterBadge";
 import RolePill from "@/features/ui/RolePill";
+import {
+    MinimalR,
+    CharacterWeaponOverview,
+} from "@/features/characterDetail/types";
 
 // ---- API 타입들 ----
 type VariantItem = {
@@ -22,31 +26,8 @@ type VariantItem = {
     weaponImageUrl?: string;
 };
 
-type OverviewBox = {
-    summary?: {
-        winRate?: number;
-        pickRate?: number;
-        mmrGain?: number;
-        survivalSec?: number;
-    };
-    stats?: { atk: number; def: number; cc: number; spd: number; sup: number };
-    routes?: Array<{ id: number; title?: string }>;
-};
-
-type CwOverview =
-    | (OverviewBox & {
-          cwId: number;
-          character: { id: number; name: string; imageUrl: string };
-          weapon: { code: number; name: string; imageUrl: string };
-          position?: { id?: number | null; name?: string };
-      })
-    | {
-          cwId: number;
-          character: { id: number; name: string; imageUrl: string };
-          weapon: { code: number; name: string; imageUrl: string };
-          position?: { id?: number | null; name?: string };
-          overview: OverviewBox;
-      };
+// ✅ 서버 타입에서 정확히 파생: UI에서 쓰는 overview 박스의 형태
+type OverviewBox = NonNullable<CharacterWeaponOverview>["overview"];
 
 type TrendRow = {
     day: string; // "YYYY-MM-DD"
@@ -142,7 +123,7 @@ export default function CharacterDetailClient({
     initial,
 }: {
     initial: {
-        r: CharacterSummary;
+        r: MinimalR;
         variants: VariantItem[];
         currentWeapon?: string;
         builds: Build[];
@@ -151,7 +132,8 @@ export default function CharacterDetailClient({
             imageUrlMini?: string;
             imageUrlFull?: string;
         };
-        overview?: CwOverview;
+        // ✅ 서버 타입 그대로: null 허용 + prop 자체는 옵셔널
+        overview?: CharacterWeaponOverview | null;
     };
 }) {
     const router = useRouter();
@@ -165,7 +147,6 @@ export default function CharacterDetailClient({
         overview,
     } = initial;
 
-    console.log(r);
     const displayName = character?.nameKr ?? (r as any).name ?? "이름 없음";
     const displayId = character?.id ?? r.id;
     const portraitSrc =
@@ -244,12 +225,13 @@ export default function CharacterDetailClient({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentWeapon, variantsKey, displayId]);
 
-    // overview 중첩/평탄 통합
+    // ✅ overview 중첩/평탄 통합: null/undefined 모두 안전
     const ov: OverviewBox | undefined = useMemo(() => {
-        if (!overview) return undefined;
-        const any = overview as any;
-        return any.overview ? any.overview : { ...any };
+        return overview ? overview.overview : undefined;
     }, [overview]);
+
+    // ✅ routes를 항상 배열로 보정해서 타입 내로잉
+    const routes = ov?.routes ?? [];
 
     // 지표
     const winRate = ov?.summary?.winRate ?? 0;
@@ -262,6 +244,7 @@ export default function CharacterDetailClient({
         (pickRate ?? 0) === 0 &&
         (mmrGain ?? 0) === 0 &&
         (survivalSec ?? 0) === 0;
+
     // 레이더(1~5 → 0~1)
     const radar = useMemo(() => {
         const s = ov?.stats;
@@ -369,24 +352,32 @@ export default function CharacterDetailClient({
                     ? json.data
                     : [];
 
-                const mapped: UiTeamComp[] = rows.map((row) => ({
-                    id: row.comp_key.join("-"),
-                    members: row.members.map((m) => ({
-                        id: m.cw_id,
-                        name: m.character_name_kr,
-                    })),
-                    membersEx: row.members.map((m) => ({
-                        id: m.cw_id,
-                        name: m.character_name_kr,
-                        img: m.image_url_mini || undefined,
-                    })),
-                    meta: {
-                        win: row.win_rate,
-                        pick: row.pick_rate,
-                        mmr: row.avg_mmr,
-                        samples: row.samples,
-                    },
-                }));
+                // ✅ TeamComp의 필수 필드(title) 채워서 매핑
+                const mapped: UiTeamComp[] = rows.map((row, idx) => {
+                    const titleFromMembers = row.members
+                        .map((m) => m.character_name_kr)
+                        .filter(Boolean)
+                        .join(" · ");
+                    return {
+                        id: row.comp_key.join("-"),
+                        title: titleFromMembers || `추천 팀 #${idx + 1}`,
+                        members: row.members.map((m) => ({
+                            id: m.cw_id,
+                            name: m.character_name_kr,
+                        })),
+                        membersEx: row.members.map((m) => ({
+                            id: m.cw_id,
+                            name: m.character_name_kr,
+                            img: m.image_url_mini || undefined,
+                        })),
+                        meta: {
+                            win: row.win_rate,
+                            pick: row.pick_rate,
+                            mmr: row.avg_mmr,
+                            samples: row.samples,
+                        },
+                    };
+                });
 
                 setTeams(mapped);
             } catch (e) {
@@ -398,6 +389,7 @@ export default function CharacterDetailClient({
                 setTeams(
                     mock.map((t) => ({
                         ...t,
+                        title: t.title || "추천 팀",
                         meta: { win: 0, pick: 0, mmr: 0, samples: 0 },
                     })),
                 );
@@ -435,15 +427,14 @@ export default function CharacterDetailClient({
         router.refresh();
     }
 
+    // ✅ overview 안전 접근 (null/undefined 모두 대응)
     const positionName =
-        (overview as any)?.position?.name ??
-        (character as any)?.position?.name ??
-        "";
+        overview?.position?.name ?? (character as any)?.position?.name ?? "";
 
     const clusters: string[] = useMemo(() => {
         const c =
             (character as any)?.clusters ??
-            (overview as any)?.clusters ??
+            overview?.clusters ??
             (r as any)?.clusters ??
             [];
         return Array.isArray(c) ? [...c].sort() : [];
@@ -459,7 +450,7 @@ export default function CharacterDetailClient({
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-app">
             {/* 헤더 */}
-            {metricsAllZero && !ov?.routes?.length && !hasComps && (
+            {metricsAllZero && routes.length === 0 && !hasComps && (
                 <div className="mb-4 rounded-md border border-app/40 bg-elev-5 px-3 py-2 text-xm font-bold text-muted-app text-center">
                     신규/최근 추가된 캐릭터라 데이터가 아직 부족해요. 일정량
                     이상 쌓이면 지표·추천이 자동으로 채워집니다.
@@ -611,7 +602,7 @@ export default function CharacterDetailClient({
                 <h2 className="text-lg font-semibold mb-2">추천 빌드</h2>
 
                 {/* ✅ 아무 경로도 없을 때 */}
-                {(!ov?.routes || ov.routes.length === 0) && (
+                {routes.length === 0 && (
                     <div className="card p-6 flex items-center justify-center">
                         <div className="text-center">
                             <div className="font-medium text-app">
@@ -625,9 +616,9 @@ export default function CharacterDetailClient({
                     </div>
                 )}
 
-                {ov?.routes?.length > 0 && (
+                {routes.length > 0 && (
                     <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 items-stretch">
-                        {ov.routes.map((b) => (
+                        {routes.map((b) => (
                             <div key={b.id} className="card p-4 relative">
                                 <CopyButton id={b.id} />
                                 <div className="font-medium text-app">
@@ -641,6 +632,7 @@ export default function CharacterDetailClient({
                     </div>
                 )}
             </section>
+
             {/* 추천 팀 조합 */}
             <section>
                 <h2 className="text-lg font-semibold mb-2">추천 팀 조합</h2>
