@@ -266,24 +266,6 @@ export default function ClusterCompsClient({
                     />
 
                     {/* 패치 셀렉트 (캐릭터 페이지와 동일한 라벨) */}
-                    <select
-                        className="rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none text-app"
-                        value={patch}
-                        onChange={(e) => setPatch(e.target.value as Patch)}
-                        title="패치 선택"
-                    >
-                        {PATCHES.map((p) => (
-                            <option key={p} value={p}>
-                                {p} (최근 14일)
-                            </option>
-                        ))}
-                    </select>
-
-                    <CharacterTabs
-                        value={tier}
-                        onChange={(v) => setTier(v)}
-                        items={GAME_TIERS}
-                    />
                 </div>
 
                 {/* 표 — 헤더 클릭 정렬 */}

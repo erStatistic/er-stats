@@ -134,25 +134,6 @@ export default function CharacterClient({
                         onChange={(e) => setQ(e.target.value)}
                     />
 
-                    <select
-                        className="rounded-xl border border-app bg-surface px-3 py-2 text-sm outline-none text-app"
-                        value={patch}
-                        onChange={(e) => setPatch(e.target.value as Patch)}
-                        title="패치 선택"
-                    >
-                        {PATCHES.map((p) => (
-                            <option key={p} value={p}>
-                                {p} (최근 14일)
-                            </option>
-                        ))}
-                    </select>
-
-                    <CharacterTabs
-                        value={gameTier}
-                        onChange={(v) => setGameTier(v)}
-                        items={GAME_TIERS}
-                    />
-
                     {/* 🍯 Honey 배지 보유만 보기 토글 */}
                     <button
                         type="button"
