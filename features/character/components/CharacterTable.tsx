@@ -133,7 +133,7 @@ export default function CharacterTable({
                     {sorted.map((r, i) => {
                         const row = r as RowLike;
                         const charId = row.characterId ?? r.id;
-                        const weaponId = row.weaponId;
+                        const weaponId = row.weapon_id;
                         const key = `${charId}-${weaponId ?? r.weapon}-${i}`;
                         const sec = parseDurationToSec(r.survivalTime as any);
 
