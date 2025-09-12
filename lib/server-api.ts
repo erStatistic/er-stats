@@ -100,7 +100,6 @@ export async function ssrGetCharacterCws(id: number): Promise<CwVariant[]> {
     const base = process.env.API_BASE_URL;
     const res = await fetch(`${base}/api/v1/characters/${id}/cws`, {
         // 캐릭터 상세는 자주 바뀌지 않으면 ISR로 바꿔도 됨
-        next: { revalidate: 300 },
         headers: { accept: "application/json" },
     });
     if (!res.ok) throw new Error(`character cws ${id} ${res.status}`);
@@ -152,7 +151,7 @@ const toNum = (v: unknown) => {
 
 export async function ssrGetCwOverview(cwId: number): Promise<CwOverview> {
     const base = process.env.NEXT_PUBLIC_API_BASE;
-    const res = await fetch(`${base}/cws/${cwId}/overview`, {
+    const res = await fetch(`/api/v1/cws/${cwId}/overview`, {
         // 개별 요청마다 최신값 원하면 no-store, 아니라면 revalidate 옵션 사용
         cache: "no-store",
         headers: { accept: "application/json" },

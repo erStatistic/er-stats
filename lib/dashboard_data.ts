@@ -31,7 +31,7 @@ export async function fetchTopCharacters(
         const base = process.env.API_BASE_URL ?? "";
         const url = (base ? `${base}` : "") + `/api/v1/analytics/cw/top5`;
 
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();

@@ -166,6 +166,7 @@ export default function CharacterDetailClient({
     } = initial;
 
     console.log(r);
+
     const displayName = character?.nameKr ?? (r as any).name ?? "이름 없음";
     const displayId = character?.id ?? r.id;
     const portraitSrc =

@@ -1,4 +1,4 @@
-// next.config.ts
+// // next.config.ts
 import type { NextConfig } from "next";
 
 const BACKEND = process.env.NEXT_PUBLIC_API;
